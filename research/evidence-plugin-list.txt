@@ -1,0 +1,12 @@
+Legend: production dependency, optional only, dev only
+
+dsh-profile-web C:\Users\Administrator\.dsh\profiles\web (PRIVATE)
+│
+│   dependencies:
+├── @hytime/dsh-thinking-effort@0.2.4
+├── @lolkda/dsh-prompt-manager@3.1.6
+├── @michengai/dsh-skills-manager@0.1.50
+├── dsh-pocket@2.10.6
+└── dshmarket@1.45.1
+
+5 packages

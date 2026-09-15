@@ -1,0 +1,19 @@
+# 本包的 bundle patch：安装本包即等于挂载一行。
+#
+# 与 @lolkda/dsh-prompt-manager 同一约定 —— profile 安装本包后，`dsh plugin add`
+# 会把 `dsh.profile.bundles` 与已安装依赖对齐，而声明了 `dsh.bundle.patch` 的依赖
+# 会加入 patch 层栈。这一行挂载宿主半边，宿主半边同时也是浏览器半边的加载前提：
+# 客户端模块系统只为「声明了 dsh.client *且* 是活动 Loader 条目」的包提供
+# exports["./client"] 那份 bundle。
+#
+# 这里刻意不写 config：默认值就是新装机器想要的（扫描 dsh-skill-filesystem 的
+# 同一批根目录、状态落在 $DSH_HOME/skills-manager/）。要改就改 profile 自己的
+# cordis.patch.yml —— 它在本层之后应用，用 id 定向 patch 覆盖本行的 config。
+#
+# 条目 id 由本包自己拥有，不得与其他包的条目 id 冲突，因此用包名而非裸的
+# `skills-manager`（那个 id 已被 @michengai/dsh-skills-manager 占用；两者同时
+# 安装会各自挂载，本包不依赖它，也不会与它互相覆盖）。
+
+- insert:
+    - id: dsh-skills-manager
+      name: '@lolkda/dsh-skills-manager'
