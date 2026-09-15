@@ -75,7 +75,7 @@ ctx.on('skills/change', ...)
 
 ### 2.7 一个未解释的现象（待验证）
 
-已装的 michengai 插件在 `~/.dsh/skills-manager/state.json` 里记了 `grill-me` 启用、`test-driven-development` 停用，其 `<你的实例>/api/lolkda-dsh-skills-manager/state` 也自报 `test-driven-development` 的 `effectiveModelInvocable=false`；但本机活动会话的技能目录里**仍列出 `test-driven-development`**，而 `grill-me`（源文件自带 `disable-model-invocation: true`）**确实被翻成了可见**。
+已装的 michengai 插件在 `~/.dsh/skills-manager/state.json` 里记了 `grill-me` 启用、`test-driven-development` 停用，其 `<你的实例>/dsh-skills-manager/state` 也自报 `test-driven-development` 的 `effectiveModelInvocable=false`；但本机活动会话的技能目录里**仍列出 `test-driven-development`**，而 `grill-me`（源文件自带 `disable-model-invocation: true`）**确实被翻成了可见**。
 
 一胜一负。最可能的解释是它只在宿主层注册全局提供方，被 preset 层的 filesystem 候选压掉；`grill-me` 的可见另有来源。**结论：不依赖它的行为，我们的实现必须两层注册 + 提供自证路由。**
 
@@ -90,7 +90,7 @@ lib/            宿主半边（纯 ESM JS，无构建步骤）
   frontmatter.js  frontmatter 读取与严格校验（零依赖，只读）
   store.js        state.json 读写（原子写）+ 策略模型
   provider.js     覆盖提供方（宿主层 + 每个 agent 作用域各一份）
-  routes.js       <你的实例>/api/lolkda-dsh-skills-manager/* HTTP 路由
+  routes.js       <你的实例>/dsh-skills-manager/* HTTP 路由
   tools.js        Agent 侧 skills CRUD 工具
 client/client.js 浏览器半边（手写懒 CJS 工厂，无打包器）
 test/            纯 node 测试
@@ -122,7 +122,7 @@ spike/           一次性机制探针
 
 ### 3.4 自证路由
 
-`GET <你的实例>/api/lolkda-dsh-skills-manager/registry` 直接返回 `ctx.skills.snapshot()` 的真实解析结果（名字 / 最终 invocation / 胜出 provider / source）。
+`GET <你的实例>/dsh-skills-manager/registry` 直接返回 `ctx.skills.snapshot()` 的真实解析结果（名字 / 最终 invocation / 胜出 provider / source）。
 
 这是本项目的验收手段：**启停是否生效不靠插件自称，而由一条 curl 读取注册表真实解析结果判定。**
 
@@ -138,7 +138,7 @@ spike/           一次性机制探针
 
 1. `node spike/registry-probe.mjs` 三个场景全绿（机制回归）。
 2. 单元测试全绿。
-3. `dsh plugin --profile web add link:F:/project/dsh-skills-manager` 后重载，`GET /api/lolkda-dsh-skills-manager/registry` 返回真实注册表。
+3. `dsh plugin --profile web add link:F:/project/dsh-skills-manager` 后重载，`GET /dsh-skills-manager/registry` 返回真实注册表。
 4. 停用某 skill 后，同一路由返回该 skill 的 `modelInvocable=false`，且新会话目录不再列出它。
 5. 卸载 michengai 后功能不受影响。
 
@@ -162,7 +162,7 @@ spike/           一次性机制探针
 | 资源 | michengai | 本插件（修正后） |
 |---|---|---|
 | 状态目录 | `$DSH_HOME/skills-manager/` | `$DSH_HOME/dsh-skills-manager/` |
-| 路由前缀 | `/api/dsh-skills-manager` | `/api/lolkda-dsh-skills-manager` |
+| 路由前缀 | `/api/dsh-skills-manager` | `/dsh-skills-manager` |
 
 前者会让两边的 `state.json` 互相覆盖；后者会让同前缀的第二次 `webServer.register` 抛错。
 

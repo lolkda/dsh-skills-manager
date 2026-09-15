@@ -78,10 +78,10 @@ dsh plugin --profile web add link:F:/project/dsh-skills-manager
 
 ## 验收：不信自报，读注册表
 
-`GET /api/lolkda-dsh-skills-manager/registry` 直接返回 `ctx.skills.snapshot()` 的真实解析结果 —— 每个技能最终赢得的 `invocation`、胜出提供方、来源。启停是否生效由它判定，而不是由本插件自己的状态接口自称：
+`GET /dsh-skills-manager/registry` 直接返回 `ctx.skills.snapshot()` 的真实解析结果 —— 每个技能最终赢得的 `invocation`、胜出提供方、来源。启停是否生效由它判定，而不是由本插件自己的状态接口自称：
 
 ```powershell
-curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/api/lolkda-dsh-skills-manager/registry
+curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 ```
 
 路由前缀刻意不复用 `@michengai/dsh-skills-manager` 的 `/api/dsh-skills-manager`：两个插件同挂时同前缀的第二次注册会抛错，本插件的宿主半边会因此整个挂载失败。
