@@ -97,11 +97,73 @@ $DSH_HOME/skills: apple-liquid-glass  frontend-ui-system  grill-me  grilling
 
 9 条技能全部可见，`grilling`（原先被 michengai 挤出裁决）回来了，4 条外部技能已变成 DSH 自有技能。michengai 自己的状态已备份到 `research/backup-michengai/state.json`。
 
-## 6. 仍需一次重载才能直接观测的一项
+## 6. 读与写的作用域不对称（本轮最重要的发现）
 
-「停用后**活动会话**的技能目录里不再列出它」需要一次真实 agent 会话。用户选择自行找时间重载，因此这一项尚未直接观测，目前由两条独立证据推出：
+`dsh-skill` 里有一处不对称，几乎必然踩一次：
 
-- `test/layers.test.mjs`：同层 rank 0 胜过 preset 层的文件系统提供方（离线，真实 `dsh-skill` + `dsh-scope` + `dsh-skill-filesystem`）；
-- 本记录第 3 节：真实实例里，我们的候选确实赢得了裁决（当时对手是 michengai 的提供方）。
+| 方向 | 作用域从哪来 |
+|---|---|
+| **写** `registerProvider` | 从调用上下文推断：`scopeOf(this.ctx)` |
+| **读** `snapshot` / `get` | **只**看 `options.scope`，不从上下文推断 |
 
-重载后 `GET /dsh-skills-manager/registry` 的 `scope` 会变成 `agent`，那就是直接证据。
+所以「从 agent 的 ctx 上调 `snapshot({})`」看起来完全合理，实际读到的是 `global` 层 —— 而真实部署里 global 层**一条技能都没有**（技能由 preset 层提供）。这个错误的表现是「界面显示正常、注册表查询为空」，极容易被误判成"没有技能"。
+
+本轮之前 `/registry` 正是这样：它读宿主层，于是移除 michengai 后返回 `count=0`。现在它按每个 agent 的**显式作用域**读取，并如实标注 `scope` 与无法解析时的原因。
+
+另外，作用域符号是上游**模块私有**的（`Symbol("dsh.scope")`，不是 `Symbol.for`）。从本包 `import` 那个包再 `scopeOf(ctx)`，在 profile 里可能落到另一个模块实例上、返回 `undefined`。`lib/scope.js` 因此改为按符号描述从上下文对象上直接取，跨实例安全，也不给本插件增加对内部包的直接依赖。
+
+## 7. 核心能力不再依赖 Web 半边（设计修正）
+
+第一次的 `inject` 写成了 `['webServer','webRuntime','skills','tools','sessions']`。那样虽然修好了「路由静默不注册」，却让整个插件在**缺 Web 服务的 profile**（headless、SDK）里根本不挂载 —— 而技能覆盖是这个插件的核心能力，不该被界面绑死。
+
+现在改为 `inject: ['skills']` + cordis 的「就绪后再装」惯用法：
+
+```js
+const ready = services.every((s) => ctx.get?.(s) !== undefined)
+if (ready) ctx.effect(() => install(ctx))
+else ctx.inject(services, (inner) => ctx.effect(() => install(inner)))
+```
+
+真机日志里能看到这两步都发生过：
+
+```
+{"event":"install-deferred","detail":"HTTP 路由：webServer、webRuntime 尚未就绪，等它出现再注册"}
+{"event":"routes-mounted","detail":"HTTP 路由已注册到 /dsh-skills-manager"}
+```
+
+`test/plugin.test.mjs` 有一条专门的回归测试覆盖这个时序。
+
+## 8. agent 级端到端证据（`test/agent-scope.test.mjs`）
+
+这是在不启动真实会话的前提下能做到的最强验证，也是本轮补上的关键一环。它走**插件自己的 `apply()`**，用真实 cordis + 真实 `dsh-scope` + 真实 `dsh-skill` + 真实 `dsh-skill-filesystem`：
+
+1. preset 层挂在一个 scope 上（正如 `standard` preset 所做）；
+2. `apply()` 挂载插件；
+3. 触发 `agent/created`，让插件按真实代码路径为这个 agent 注册覆盖提供方；
+4. 用插件真实的策略接口停用一条技能；
+5. 断言**该 agent 所在层**解析出的结果翻转，且源文件零改动。
+
+```
+✔ 未设覆盖时，agent 层看到 preset 层文件系统提供的全部技能
+✔ 停用后，该 agent 作用域里的裁决真的翻转（不碰源文件）
+```
+
+它同时验证了 `lib/scope.js` 自行解析出的作用域 key 与上游 `scopeOf()` 一致。
+
+## 9. 仍然只能由一次重载完成的观测
+
+「停用后**活动会话**的技能目录里不再列出它」—— 直接观测需要一次真实 agent 会话。三条路都走过：
+
+| 路径 | 结果 |
+|---|---|
+| `sdk-minimal` profile 跑一次性任务 | 该 profile **刻意排除 skills**，插件不会挂载 |
+| web app 一次性 prompt | `dsh --profile web` 没有这个选项 |
+| 直接调 `/api` RPC 建会话 | 端点由 typert 生成，未在合理成本内定位 |
+
+用户选择自行找时间重载，所以这一项留待重载后确认。插件已为此准备好直接证据：**每个 agent 一建立就把该作用域解析出的技能写进活动日志**（`scope-snapshot` 事件）：
+
+```
+{"event":"scope-snapshot","detail":"agent <id> 的技能视图：共 9 条 —— apple-liquid-glass、…"}
+```
+
+重载后打开任意会话，这条日志就是会话级证据；此时 `GET /dsh-skills-manager/registry` 的 `scope` 也会变成 `agent`。

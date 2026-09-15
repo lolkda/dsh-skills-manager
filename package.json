@@ -19,7 +19,7 @@
   "scripts": {
     "test": "node --test",
     "spike": "node spike/registry-probe.mjs",
-    "check": "node --check lib/index.js && node --check lib/routes.js && node --check lib/provider.js && node --check lib/tools.js && node --check client/client.js && node test/run.mjs"
+    "check": "node --check client/client.js && node --test"
   },
   "dsh": {
     "bundle": {

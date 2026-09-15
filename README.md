@@ -86,8 +86,19 @@ curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 
 响应里的 `scope` 字段说明它读的是哪一层，这一点很关键：
 
-- `scope: "host"` —— 没有任何活动会话，读到的是宿主层。**真实部署里宿主层通常一条技能都没有**：技能由 preset 层提供，而 `dsh-skill` 的候选来自 `[layers.global, ...chainLayers(scope)]`，不带 scope 只看到 global。
+- `scope: "host"` —— 没有任何活动会话，读到的是宿主层。**真实部署里宿主层通常一条技能都没有**：技能由 preset 层提供，而 `dsh-skill` 的候选来自 `[layers.global, ...chainLayers(scope)]`。
 - `scope: "agent"` —— 有会话，`skills` 是该 agent 所在层链的合并结果，也就是模型真正看到的那一份。`host` 字段仍然给出宿主层视图供对照。
+
+读与写在作用域上是不对称的，写代码时几乎必然踩一次：
+
+| 方向 | 作用域从哪来 |
+|---|---|
+| 写 `registerProvider` | 从调用上下文推断（`scopeOf(this.ctx)`） |
+| 读 `snapshot` / `get` | **只**看 `options.scope`，不从上下文推断 |
+
+所以「从 agent 的 ctx 上调 `snapshot({})`」看起来合理，实际读到的是 global 层的空结果。`lib/scope.js` 负责把这层差异收进一个地方。
+
+活动日志里每个 agent 建立时会记一条 `scope-snapshot`，写明**那个会话**解析出的技能清单 —— 排查「为什么这个会话里没有它」看这里，而不是看插件自己的状态接口。
 
 路由前缀为什么不放在 `/api` 下：`dsh-client-connection` 用 `{kind:'prefix', path:'/api'}` 注册了一个鉴权路由，而前缀路由**先注册先匹配**；本插件的 bundle 排在 profile 末尾，于是所有 `/api/*` 请求恒定 401。`@lolkda/dsh-prompt-manager` 早已用非 `/api` 前缀绕开这一点。
 
