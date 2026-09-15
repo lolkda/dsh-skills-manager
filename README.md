@@ -78,24 +78,48 @@ dsh plugin --profile web add link:F:/project/dsh-skills-manager
 
 ## 验收：不信自报，读注册表
 
-`GET /dsh-skills-manager/registry` 直接返回 `ctx.skills.snapshot()` 的真实解析结果 —— 每个技能最终赢得的 `invocation`、胜出提供方、来源。启停是否生效由它判定，而不是由本插件自己的状态接口自称：
+`GET /dsh-skills-manager/registry` 返回 `ctx.skills.snapshot()` 的真实解析结果 —— 每个技能最终赢得的 `invocation`、胜出提供方、来源。启停是否生效由它判定，而不是由本插件自己的状态接口自称：
 
 ```powershell
 curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 ```
 
-路由前缀刻意不复用 `@michengai/dsh-skills-manager` 的 `/api/dsh-skills-manager`：两个插件同挂时同前缀的第二次注册会抛错，本插件的宿主半边会因此整个挂载失败。
+响应里的 `scope` 字段说明它读的是哪一层，这一点很关键：
+
+- `scope: "host"` —— 没有任何活动会话，读到的是宿主层。**真实部署里宿主层通常一条技能都没有**：技能由 preset 层提供，而 `dsh-skill` 的候选来自 `[layers.global, ...chainLayers(scope)]`，不带 scope 只看到 global。
+- `scope: "agent"` —— 有会话，`skills` 是该 agent 所在层链的合并结果，也就是模型真正看到的那一份。`host` 字段仍然给出宿主层视图供对照。
+
+路由前缀为什么不放在 `/api` 下：`dsh-client-connection` 用 `{kind:'prefix', path:'/api'}` 注册了一个鉴权路由，而前缀路由**先注册先匹配**；本插件的 bundle 排在 profile 末尾，于是所有 `/api/*` 请求恒定 401。`@lolkda/dsh-prompt-manager` 早已用非 `/api` 前缀绕开这一点。
+
+## 从 michengai 迁移
+
+`@michengai/dsh-skills-manager` 会聚合 `~/.cc-switch/skills`、`~/.codex/skills`、`~/.claude/skills` 这些**外部**目录，其中一部分技能在 DSH 自有目录里并不存在。移除它之后那些技能会一起消失 —— 它们本来只是靠那个插件才可见。
+
+把它们导入到 `$DSH_HOME/skills` 之后再移除，技能就不会丢：
+
+```powershell
+node scripts/migrate-external-skills.mjs --dry-run   # 先看会做什么
+node scripts/migrate-external-skills.mjs             # 默认不覆盖同名技能，可重复运行
+```
+
+脚本复用插件自己的 `importDirectory`，因此语义与界面上的「导入」完全一致：文档统一落成 `SKILL.md`，目录名取自 frontmatter 的 `name`（例如 `apple-design-skill-project` 会落成 `apple-liquid-glass`），附属文件原样保留。
 
 ## 开发
 
 零构建步骤：宿主半边是手写 ESM JS，浏览器半边是客户端模块系统的手写懒 CJS 工厂，因此不存在「改了源码忘了构建」这一类失败模式。
 
 ```powershell
-node --test              # 单元测试 + 对真实注册表的集成测试
-node spike/registry-probe.mjs   # 一次性机制探针：打印三个场景下的胜出者
+node --test                      # 62 个测试：单元 + 真实注册表集成 + 分层遮蔽 + 客户端契约
+node spike/registry-probe.mjs    # 一次性机制探针：打印三个场景下的胜出者
 ```
 
-工程约定与已实测的机制细节见 `research/DESIGN.md`。
+改动宿主半边后需要重载 profile 才生效：
+
+```powershell
+dsh plugin --profile web add link:F:/project/dsh-skills-manager
+```
+
+工程约定与已实测的机制细节见 `research/DESIGN.md`，真机验收证据见 `research/ACCEPTANCE.md`。
 
 ## 许可
 

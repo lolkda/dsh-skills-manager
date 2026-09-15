@@ -62,21 +62,46 @@ test-driven-development    model=false  user=false  provider=dsh-skills-manager 
 
 即客户端 bundle 已被模块系统收录。
 
-## 4. 尚未直接观测的一项
+## 4. 会话级证据：宿主层不是会话层
 
-「停用后**活动会话**的技能目录里不再列出它」需要一次真实 agent 会话才能直接看到。当前用户实例（3080）跑的是旧组合，本插件未加载；第二实例里没有会话。结论目前由两条独立证据推出：
+移除 michengai 之后 `/registry` 返回 `count=0`，起初像是故障。查 `dsh-skill` 源码后确认是**预期**：`collectFresh` 的候选来自 `[layers.global, ...chainLayers(scope)]`，不带 `scope` 只读 global；真实技能由 preset 层提供（`dsh-base` 那几行管线的落点不在 global），所以宿主层在真实部署里本来就是空的。
 
-- `test/layers.test.mjs`：同层 rank 0 胜过 preset 层的文件系统提供方（离线、真实 `dsh-skill` + `dsh-scope` + `dsh-skill-filesystem`）；
-- 本记录第 3 节：真实实例的注册表里，我们的候选确实赢得了裁决。
+这解释了为什么必须双重注册，也解释了为什么早先那次 401 之外的第一次验收「通过」得有点容易 —— 那次读的是宿主层，而宿主层当时只有我们和 michengai 两家在供数。
 
-重载 3080 之后即可直接观测。
+因此 `/registry` 改为：有 agent 时报告 agent 层的合并结果并标注 `scope: "agent"`，没有 agent 时退回宿主层并标注 `scope: "host"`，同时始终附上 `host` 视图供对照。这样它才是一个不会误导人的自证端点。
 
-## 5. 顺带发现：michengai 会遮蔽 DSH 自有技能
+## 5. michengai 的取舍（已按用户选择执行）
 
-注册表里 8 条全部来自 `dsh-skills-manager-external`（michengai 聚合的外部目录），而 `$DSH_HOME/skills` 下真实存在的 5 条中，`grilling` **完全不在注册表里**；`grill-me` 文件里写着 `disable-model-invocation: true`，注册表却报 `model=true`。
+用户选择「先导入到 `$DSH_HOME/skills`，再移除 michengai」。执行结果：
 
-也就是说：**michengai 不只是"多管了外部目录"，它还把 DSH 自有的技能目录整体挤出了裁决结果，并覆盖了文件自带的调用策略。**
+```
+node scripts/migrate-external-skills.mjs
+→ 导入 4 条，跳过 0 条，失败 0 条
 
-—— 这也解释了 `research/DESIGN.md` 2.7 节那个"无法解释的现象"：本会话技能目录里 `test-driven-development`（michengai 自报停用）仍然出现，因为它的停用确实没有生效。
+$DSH_HOME/skills: apple-liquid-glass  frontend-ui-system  grill-me  grilling
+                  improve-codebase-architecture  python-typed-development-standards
+                  reverse-flow  test-driven-development
+```
 
-移除 michengai 后的直接后果：`apple-liquid-glass`、`frontend-ui-system`、`reverse-flow`、`improve-codebase-architecture` 这 4 条只存在于外部目录的技能将不再出现在目录里；而 `grilling` 等 5 条 DSH 自有技能会恢复出现。这属于既定范围决策（只管理 DSH 会读取的目录），但需要用户确认，尤其是是否要把那 4 条外部技能**导入**到 `$DSH_HOME/skills` 以免丢失。
+`apple-design-skill-project` 按 frontmatter 的 `name` 落成 `apple-liquid-glass`（64 个附属文件原样保留）。三个外部副本（cc-switch / codex / claude）逐字节一致，脚本用 `~/.cc-switch/skills` 作源。
+
+`dsh plugin --profile web remove @michengai/dsh-skills-manager` 之后，本插件自己的目录视图：
+
+```
+/catalog 根        = dsh(8)  agents(1)
+/catalog 生效技能  = apple-liquid-glass, frontend-ui-system, grill-me, grilling,
+                     improve-codebase-architecture, python-typed-development-standards,
+                     refactor, reverse-flow, test-driven-development
+/registry          = scope: host, host skills: 0, agents: []
+```
+
+9 条技能全部可见，`grilling`（原先被 michengai 挤出裁决）回来了，4 条外部技能已变成 DSH 自有技能。michengai 自己的状态已备份到 `research/backup-michengai/state.json`。
+
+## 6. 仍需一次重载才能直接观测的一项
+
+「停用后**活动会话**的技能目录里不再列出它」需要一次真实 agent 会话。用户选择自行找时间重载，因此这一项尚未直接观测，目前由两条独立证据推出：
+
+- `test/layers.test.mjs`：同层 rank 0 胜过 preset 层的文件系统提供方（离线，真实 `dsh-skill` + `dsh-scope` + `dsh-skill-filesystem`）；
+- 本记录第 3 节：真实实例里，我们的候选确实赢得了裁决（当时对手是 michengai 的提供方）。
+
+重载后 `GET /dsh-skills-manager/registry` 的 `scope` 会变成 `agent`，那就是直接证据。

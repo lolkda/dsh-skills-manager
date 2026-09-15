@@ -26,7 +26,8 @@ import { validateHost } from '../lib/routes.js'
  * 搭起整套环境：临时 DSH_HOME、真实注册表、被捕获的路由与工具。
  * @returns {Promise<object>} 环境
  */
-async function boot() {
+async function boot(options = {}) {
+  const agents = options.agents
   const dir = mkdtempSync(join(tmpdir(), 'dshsm-plugin-'))
   const home = join(dir, '.dsh')
   const agentsHome = join(dir, '.agents')
@@ -74,6 +75,8 @@ async function boot() {
           },
         }
       }
+      // 只有显式传入时才提供 agents 服务，用来覆盖 /registry 的「有 agent」分支。
+      if (service === 'agents') return agents
       return undefined
     },
     on() {
@@ -193,6 +196,49 @@ test('工具渲染把失败结果显示成可读文本', async () => {
     const rendered = tool.output.render({}, { ok: false, error: '找不到名为 x 的技能' })
     assert.ok(Array.isArray(rendered))
     assert.match(rendered[0].text, /找不到名为 x 的技能/)
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('GET /registry 没有 agent 时退回宿主层视图', async () => {
+  const env = await boot()
+  try {
+    const response = await env.request('GET', '/dsh-skills-manager/registry')
+    assert.equal(response.ok, true)
+    assert.equal(response.data.scope, 'host')
+    assert.deepEqual(response.data.agents, [])
+    assert.ok(response.data.skills.length > 0, '宿主层在测试环境里由文件系统提供方供数')
+    assert.ok(response.data.host.skills.length > 0)
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('GET /registry 有 agent 时优先报告该 agent 所在层的裁决', async () => {
+  // 真实会话看到的是 agent 层的合并结果，而不是宿主层 —— 宿主层在真实部署里往往是空的。
+  // 这里用一个只回一条技能的假 agent 注册表，验证路由确实切到了 agent 视图。
+  const agentSkills = {
+    async snapshot() {
+      return {
+        complete: true,
+        skills: [{ name: 'from-agent', invocation: { modelInvocable: false, userInvocable: true }, provider: 'dsh-skills-manager', source: 'agent' }],
+      }
+    },
+  }
+  const env = await boot({
+    agents: {
+      list: () => [{ id: 'agent-1', ctx: { get: (service) => (service === 'skills' ? agentSkills : undefined) } }],
+    },
+  })
+  try {
+    const response = await env.request('GET', '/dsh-skills-manager/registry')
+    assert.equal(response.data.scope, 'agent')
+    assert.deepEqual(response.data.skills.map((s) => s.name), ['from-agent'])
+    assert.equal(response.data.skills[0].fromThisPlugin, true)
+    assert.equal(response.data.agents[0].id, 'agent-1')
+    assert.equal(response.data.agents[0].count, 1)
+    assert.ok(response.data.host.skills.length > 0, '宿主层视图仍然照常给出，便于对照')
   } finally {
     env.cleanup()
   }

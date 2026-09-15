@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "sources": {
+    "agents": true,
+    "ccswitch": true,
+    "codex": true,
+    "claude": true,
+    "gemini": true,
+    "opencode": true,
+    "cursor": true,
+    "copilot": true,
+    "windsurf": true,
+    "windsurf-user": true,
+    "trae": true,
+    "trae-cn": true,
+    "openclaw": true,
+    "clawdbot": true,
+    "roo": true,
+    "codebuddy": true
+  },
+  "disabledSkills": {
+    "dsh": [
+      "test-driven-development"
+    ],
+    "agents": [],
+    "ccswitch": [],
+    "codex": [],
+    "claude": [],
+    "gemini": [],
+    "opencode": [],
+    "cursor": [],
+    "copilot": [],
+    "windsurf": [],
+    "windsurf-user": [],
+    "trae": [],
+    "trae-cn": [],
+    "openclaw": [],
+    "clawdbot": [],
+    "roo": [],
+    "codebuddy": []
+  },
+  "enabledSkills": {
+    "dsh": [
+      "grill-me"
+    ],
+    "agents": [],
+    "ccswitch": [],
+    "codex": [],
+    "claude": [],
+    "gemini": [],
+    "opencode": [],
+    "cursor": [],
+    "copilot": [],
+    "windsurf": [],
+    "windsurf-user": [],
+    "trae": [],
+    "trae-cn": [],
+    "openclaw": [],
+    "clawdbot": [],
+    "roo": [],
+    "codebuddy": []
+  }
+}
