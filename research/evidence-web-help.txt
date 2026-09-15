@@ -1,0 +1,18 @@
+Usage: dsh --profile web [options]
+
+Serve the DeepSeek Harness browser UI.
+
+Options:
+  --host <host>                  bind host
+  --no-open                      do not open the Web UI in the default browser
+  --port <port>                  listen port; pass 0 to let the OS pick a free
+                                 one
+  --trusted-host <authority...>  extra authority the /api browser-trust fence
+                                 accepts (host or host:port; repeatable)
+  -h, --help                     show this help
+
+Examples:
+  dsh --profile web                          serve on the composed host and port
+  dsh --profile web --no-open                serve without opening a browser
+  dsh --profile web --port 8080              serve on another port
+

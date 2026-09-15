@@ -101,7 +101,7 @@ spike/           一次性机制探针
 
 ### 3.2 状态与策略
 
-`$DSH_HOME/skills-manager/state.json`
+`$DSH_HOME/dsh-skills-manager/state.json`
 
 ```json
 { "version": 1, "overrides": { "<rootKey>": { "<skill-name>": { "enabled": true|false } } } }

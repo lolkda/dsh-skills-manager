@@ -72,9 +72,9 @@ dsh plugin --profile web add link:F:/project/dsh-skills-manager
 | `customSkillDirs` | `[]` | rank 300 的额外根 |
 | `bundledSkillDir` | `$DSH_BUNDLED_SKILL_DIR` | rank 600 的内置根，只读 |
 | `dshHome` / `agentsHome` | `$DSH_HOME` / `$DSH_AGENTS_HOME` | 根目录解析基准 |
-| `log` | `true` | 是否写 `$DSH_HOME/dsh-skills-manager.log` |
+| `log` | `true` | 是否写 `$DSH_HOME/dsh-skills-manager/dsh-skills-manager.log` |
 
-状态落在 `$DSH_HOME/skills-manager/state.json`，**只存显式覆盖**，不缓存任何从磁盘推导出的内容。
+状态落在 `$DSH_HOME/dsh-skills-manager/state.json`，**只存显式覆盖**，不缓存任何从磁盘推导出的内容。
 
 ## 验收：不信自报，读注册表
 

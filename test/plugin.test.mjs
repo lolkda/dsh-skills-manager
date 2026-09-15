@@ -292,7 +292,7 @@ test('删除技能会一并清掉它的启停覆盖', async () => {
   try {
     await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
     await env.request('POST', '/api/dsh-skills-manager/skill/trash', { rootKey: 'dsh', name: 'plain' })
-    const state = JSON.parse(readFileSync(join(env.home, 'skills-manager', 'state.json'), 'utf8'))
+    const state = JSON.parse(readFileSync(join(env.home, 'dsh-skills-manager', 'state.json'), 'utf8'))
     assert.deepEqual(state.overrides.dsh ?? {}, {}, '同名技能以后重建时不该继承旧的停用状态')
   } finally {
     env.cleanup()
