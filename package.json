@@ -12,6 +12,7 @@
   "files": [
     "lib",
     "client",
+    "scripts",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"

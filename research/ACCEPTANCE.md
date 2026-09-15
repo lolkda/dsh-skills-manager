@@ -167,3 +167,48 @@ else ctx.inject(services, (inner) => ctx.effect(() => install(inner)))
 ```
 
 重载后打开任意会话，这条日志就是会话级证据；此时 `GET /dsh-skills-manager/registry` 的 `scope` 也会变成 `agent`。
+
+## 10. 最终代码的真机复验
+
+改完延迟注入与 scope 读法之后，用 `dsh web --port 3099 --no-open` 重新引导，跑完整流程：
+
+```
+GET  /dsh-skills-manager/catalog            → 200
+GET  /dsh-skills-manager/registry            → scope=host  host.skills=0  agents=[]
+POST /dsh-skills-manager/policy  grilling=false → ok=true changed=true
+     registry: provider=dsh-skills-manager model=false user=false
+POST /dsh-skills-manager/policy  grilling=null  → ok=true changed=true
+     registry: （回到基线）
+```
+
+三个细节值得记下：
+
+1. **基线里 `grilling` 根本不在宿主层** —— 因为技能由 preset 层提供，宿主层本来就是空的。停用之后它以我们的候选身份出现，清除之后又消失。这从反面说明「读宿主层」这种验证方式本身有多容易误判。
+2. 源文件 `~/.dsh/skills/grilling/SKILL.md` 里 `disable-model-invocation` 出现 **0** 次 —— 全程未改文件。
+3. 收尾时 `state.json` 回到 `{"version":1,"overrides":{}}`，全部覆盖已清除，不留残留。
+
+活动日志同时记下了两个半边都装上了：
+
+```
+{"event":"install-deferred","detail":"HTTP 路由：webServer、webRuntime 尚未就绪，等它出现再注册"}
+{"event":"routes-mounted","detail":"HTTP 路由已注册到 /dsh-skills-manager"}
+```
+
+## 11. 测试现状
+
+```
+node --test  →  73 tests, 73 pass, 0 fail
+```
+
+| 文件 | 覆盖 |
+|---|---|
+| `frontmatter.test.mjs` | frontmatter 解析、布尔极性、非法写法 |
+| `roots.test.mjs` | 根目录发现与 rank |
+| `catalog.test.mjs` | 聚合、遮蔽、覆盖生效与 `overrideShadowed` |
+| `registry.test.mjs` | 对**真实** `dsh-skill` + `dsh-skill-filesystem` 的集成 |
+| `layers.test.mjs` | 分层遮蔽：同层 rank 0 胜出、跨层必败 |
+| `agent-scope.test.mjs` | 走真实 `apply()` 的 agent 级端到端翻转 |
+| `plugin.test.mjs` | 插件级 HTTP 路由与工具注册、延迟注入时序、scope 传递 |
+| `client.test.mjs` | 浏览器半边契约（注册形状、模块依赖、样式注入） |
+| `client-render.test.mjs` | 浏览器半边数据流（挂载拉取、渲染、切换请求、错误显示） |
+| `zip.test.mjs` / `operations.test.mjs` | ZIP 与 zip-slip、新建/编辑/导入/回收站 |
