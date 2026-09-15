@@ -22,7 +22,7 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useState } = React
 
     /** 宿主路由前缀，必须与 lib/routes.js 的 ROUTE_PREFIX 一致。 */
-    const ROUTE = '/api/dsh-skills-manager'
+    const ROUTE = '/api/lolkda-dsh-skills-manager'
 
     /** 设置导航里的位置：排在提示词之后。 */
     const SECTION_ORDER = 62

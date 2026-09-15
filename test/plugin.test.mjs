@@ -159,7 +159,7 @@ test('apply 注册了路由、工具与两个提供方', async () => {
     assert.equal(env.registryReady, true)
     assert.equal(env.routes.length, 1)
     assert.equal(env.routes[0].kind, 'prefix')
-    assert.equal(env.routes[0].path, '/api/dsh-skills-manager')
+    assert.equal(env.routes[0].path, '/api/lolkda-dsh-skills-manager')
     assert.ok(env.tools.length >= 6, `工具数量偏少：${env.tools.length}`)
     assert.ok(env.tools.some((t) => t.name === 'skills_set_enabled'))
   } finally {
@@ -170,7 +170,7 @@ test('apply 注册了路由、工具与两个提供方', async () => {
 test('GET /catalog 返回根、技能与回收站视图', async () => {
   const env = await boot()
   try {
-    const response = await env.request('GET', '/api/dsh-skills-manager/catalog')
+    const response = await env.request('GET', '/api/lolkda-dsh-skills-manager/catalog')
     assert.equal(response.statusCode, 200)
     assert.equal(response.ok, true)
     const names = response.data.skills.map((s) => s.name)
@@ -189,13 +189,13 @@ test('GET /catalog 返回根、技能与回收站视图', async () => {
 test('POST /policy 停用后，注册表的真实裁决随之改变', async () => {
   const env = await boot()
   try {
-    const before = await env.request('GET', '/api/dsh-skills-manager/registry')
+    const before = await env.request('GET', '/api/lolkda-dsh-skills-manager/registry')
     assert.equal(before.data.skills.find((s) => s.name === 'plain').modelInvocable, true)
 
-    const response = await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
+    const response = await env.request('POST', '/api/lolkda-dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
     assert.equal(response.ok, true, response.error)
 
-    const after = await env.request('GET', '/api/dsh-skills-manager/registry')
+    const after = await env.request('GET', '/api/lolkda-dsh-skills-manager/registry')
     const plain = after.data.skills.find((s) => s.name === 'plain')
     assert.equal(plain.modelInvocable, false, '注册表必须真的不再向模型提供它')
     assert.equal(plain.userInvocable, false)
@@ -214,9 +214,9 @@ test('POST /policy 停用后，注册表的真实裁决随之改变', async () =
 test('POST /policy 能翻转文件里的 disable-model-invocation', async () => {
   const env = await boot()
   try {
-    const response = await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'locked', enabled: true })
+    const response = await env.request('POST', '/api/lolkda-dsh-skills-manager/policy', { rootKey: 'dsh', name: 'locked', enabled: true })
     assert.equal(response.ok, true, response.error)
-    const registry = await env.request('GET', '/api/dsh-skills-manager/registry')
+    const registry = await env.request('GET', '/api/lolkda-dsh-skills-manager/registry')
     assert.equal(registry.data.skills.find((s) => s.name === 'locked').modelInvocable, true)
     assert.ok(readFileSync(join(env.home, 'skills', 'locked', 'SKILL.md'), 'utf8').includes('disable-model-invocation'), '文件里那句仍然在')
   } finally {
@@ -227,7 +227,7 @@ test('POST /policy 能翻转文件里的 disable-model-invocation', async () => 
 test('POST /skill/create 落盘，重复创建被拒', async () => {
   const env = await boot()
   try {
-    const created = await env.request('POST', '/api/dsh-skills-manager/skill/create', {
+    const created = await env.request('POST', '/api/lolkda-dsh-skills-manager/skill/create', {
       rootKey: 'dsh',
       name: 'Brand New',
       description: '新建的技能',
@@ -238,7 +238,7 @@ test('POST /skill/create 落盘，重复创建被拒', async () => {
     assert.equal(existsSync(join(env.home, 'skills', 'brand-new', 'SKILL.md')), true)
     assert.ok(created.catalog.skills.some((s) => s.name === 'brand-new'))
 
-    const again = await env.request('POST', '/api/dsh-skills-manager/skill/create', { rootKey: 'dsh', name: 'brand-new', description: 'x' })
+    const again = await env.request('POST', '/api/lolkda-dsh-skills-manager/skill/create', { rootKey: 'dsh', name: 'brand-new', description: 'x' })
     assert.equal(again.ok, false)
     assert.equal(again.code, 'skill.exists')
   } finally {
@@ -249,7 +249,7 @@ test('POST /skill/create 落盘，重复创建被拒', async () => {
 test('POST /skill/save 拒绝会弄坏技能的正文', async () => {
   const env = await boot()
   try {
-    const broken = await env.request('POST', '/api/dsh-skills-manager/skill/save', {
+    const broken = await env.request('POST', '/api/lolkda-dsh-skills-manager/skill/save', {
       rootKey: 'dsh',
       name: 'plain',
       content: '彻底没有 frontmatter',
@@ -258,7 +258,7 @@ test('POST /skill/save 拒绝会弄坏技能的正文', async () => {
     assert.equal(broken.code, 'document.invalid')
     assert.match(readFileSync(join(env.home, 'skills', 'plain', 'SKILL.md'), 'utf8'), /普通技能/)
 
-    const saved = await env.request('POST', '/api/dsh-skills-manager/skill/save', {
+    const saved = await env.request('POST', '/api/lolkda-dsh-skills-manager/skill/save', {
       rootKey: 'dsh',
       name: 'plain',
       content: '---\nname: plain\ndescription: 改过了\n---\n新正文\n',
@@ -273,13 +273,13 @@ test('POST /skill/save 拒绝会弄坏技能的正文', async () => {
 test('回收站路由：移入、恢复', async () => {
   const env = await boot()
   try {
-    const trashed = await env.request('POST', '/api/dsh-skills-manager/skill/trash', { rootKey: 'dsh', name: 'plain' })
+    const trashed = await env.request('POST', '/api/lolkda-dsh-skills-manager/skill/trash', { rootKey: 'dsh', name: 'plain' })
     assert.equal(trashed.ok, true, trashed.error)
     assert.equal(existsSync(join(env.home, 'skills', 'plain')), false)
     assert.equal(trashed.catalog.trash.length, 1)
     const id = trashed.catalog.trash[0].id
 
-    const restored = await env.request('POST', '/api/dsh-skills-manager/trash/restore', { id })
+    const restored = await env.request('POST', '/api/lolkda-dsh-skills-manager/trash/restore', { id })
     assert.equal(restored.ok, true, restored.error)
     assert.equal(existsSync(join(env.home, 'skills', 'plain', 'SKILL.md')), true)
   } finally {
@@ -290,8 +290,8 @@ test('回收站路由：移入、恢复', async () => {
 test('删除技能会一并清掉它的启停覆盖', async () => {
   const env = await boot()
   try {
-    await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
-    await env.request('POST', '/api/dsh-skills-manager/skill/trash', { rootKey: 'dsh', name: 'plain' })
+    await env.request('POST', '/api/lolkda-dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
+    await env.request('POST', '/api/lolkda-dsh-skills-manager/skill/trash', { rootKey: 'dsh', name: 'plain' })
     const state = JSON.parse(readFileSync(join(env.home, 'dsh-skills-manager', 'state.json'), 'utf8'))
     assert.deepEqual(state.overrides.dsh ?? {}, {}, '同名技能以后重建时不该继承旧的停用状态')
   } finally {
@@ -302,10 +302,10 @@ test('删除技能会一并清掉它的启停覆盖', async () => {
 test('未知 rootKey 与非回环 Host 被拒绝', async () => {
   const env = await boot()
   try {
-    const unknown = await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'nope', name: 'plain', enabled: false })
+    const unknown = await env.request('POST', '/api/lolkda-dsh-skills-manager/policy', { rootKey: 'nope', name: 'plain', enabled: false })
     assert.equal(unknown.code, 'root.unknown')
 
-    const forbidden = await env.request('GET', '/api/dsh-skills-manager/catalog', undefined, 'evil.example.com')
+    const forbidden = await env.request('GET', '/api/lolkda-dsh-skills-manager/catalog', undefined, 'evil.example.com')
     assert.equal(forbidden.statusCode, 403)
     assert.equal(forbidden.code, 'host.forbidden')
   } finally {

@@ -75,7 +75,7 @@ ctx.on('skills/change', ...)
 
 ### 2.7 一个未解释的现象（待验证）
 
-已装的 michengai 插件在 `~/.dsh/skills-manager/state.json` 里记了 `grill-me` 启用、`test-driven-development` 停用，其 `/api/dsh-skills-manager/state` 也自报 `test-driven-development` 的 `effectiveModelInvocable=false`；但本机活动会话的技能目录里**仍列出 `test-driven-development`**，而 `grill-me`（源文件自带 `disable-model-invocation: true`）**确实被翻成了可见**。
+已装的 michengai 插件在 `~/.dsh/skills-manager/state.json` 里记了 `grill-me` 启用、`test-driven-development` 停用，其 `<你的实例>/api/lolkda-dsh-skills-manager/state` 也自报 `test-driven-development` 的 `effectiveModelInvocable=false`；但本机活动会话的技能目录里**仍列出 `test-driven-development`**，而 `grill-me`（源文件自带 `disable-model-invocation: true`）**确实被翻成了可见**。
 
 一胜一负。最可能的解释是它只在宿主层注册全局提供方，被 preset 层的 filesystem 候选压掉；`grill-me` 的可见另有来源。**结论：不依赖它的行为，我们的实现必须两层注册 + 提供自证路由。**
 
@@ -90,7 +90,7 @@ lib/            宿主半边（纯 ESM JS，无构建步骤）
   frontmatter.js  frontmatter 读取与严格校验（零依赖，只读）
   store.js        state.json 读写（原子写）+ 策略模型
   provider.js     覆盖提供方（宿主层 + 每个 agent 作用域各一份）
-  routes.js       /api/dsh-skills-manager/* HTTP 路由
+  routes.js       <你的实例>/api/lolkda-dsh-skills-manager/* HTTP 路由
   tools.js        Agent 侧 skills CRUD 工具
 client/client.js 浏览器半边（手写懒 CJS 工厂，无打包器）
 test/            纯 node 测试
@@ -122,7 +122,7 @@ spike/           一次性机制探针
 
 ### 3.4 自证路由
 
-`GET /api/dsh-skills-manager/registry` 直接返回 `ctx.skills.snapshot()` 的真实解析结果（名字 / 最终 invocation / 胜出 provider / source）。
+`GET <你的实例>/api/lolkda-dsh-skills-manager/registry` 直接返回 `ctx.skills.snapshot()` 的真实解析结果（名字 / 最终 invocation / 胜出 provider / source）。
 
 这是本项目的验收手段：**启停是否生效不靠插件自称，而由一条 curl 读取注册表真实解析结果判定。**
 
@@ -138,6 +138,42 @@ spike/           一次性机制探针
 
 1. `node spike/registry-probe.mjs` 三个场景全绿（机制回归）。
 2. 单元测试全绿。
-3. `dsh plugin --profile web add link:F:/project/dsh-skills-manager` 后重载，`GET /api/dsh-skills-manager/registry` 返回真实注册表。
+3. `dsh plugin --profile web add link:F:/project/dsh-skills-manager` 后重载，`GET /api/lolkda-dsh-skills-manager/registry` 返回真实注册表。
 4. 停用某 skill 后，同一路由返回该 skill 的 `modelInvocable=false`，且新会话目录不再列出它。
 5. 卸载 michengai 后功能不受影响。
+
+## 4. 验证记录
+
+### 4.1 分层遮蔽（`test/layers.test.mjs`，已证）
+
+用 `@deepseek-ai/dsh-scope` 的 `createScope` 复现「宿主层 + preset 层」的组合，挂真实的 `dsh-skill` 与 `dsh-skill-filesystem`：
+
+| 场景 | 结果 |
+|---|---|
+| 文件系统提供方注册在 preset 层，覆盖只注册在宿主层 | 胜出者仍是 `filesystem`，`modelInvocable` 仍为 `true` —— **停用完全没有生效** |
+| 覆盖同时注册进 preset 层 | 胜出者是 `dsh-skills-manager`，`modelInvocable=false` —— 停用生效 |
+
+**结论**：`lib/index.js` 的 `installAgentProviders` 是必需品而非保险。参考实现只注册了宿主层，这解释了 2.7 节的现象。
+
+### 4.2 命名空间冲突（已修）
+
+两处与 `@michengai/dsh-skills-manager` 的**直接冲突**，都会在并存期造成数据损坏或挂载失败：
+
+| 资源 | michengai | 本插件（修正后） |
+|---|---|---|
+| 状态目录 | `$DSH_HOME/skills-manager/` | `$DSH_HOME/dsh-skills-manager/` |
+| 路由前缀 | `/api/dsh-skills-manager` | `/api/lolkda-dsh-skills-manager` |
+
+前者会让两边的 `state.json` 互相覆盖；后者会让同前缀的第二次 `webServer.register` 抛错。
+
+### 4.3 客户端依赖（实测）
+
+DSH 的客户端模块表里**没有** `@deepseek-ai/dsh-client-ui-primitives`（npx 树与 profile 树都没有），而参考实现的 `client/client.js` 却在 require 它。本插件的浏览器半边因此只依赖 `react`，样式自带。`test/client.test.mjs` 会在 `node:vm` 里加载 bundle，任何对模块表之外模块的 require 都会让测试失败。
+
+### 4.4 测试现状
+
+```
+node --test  →  58 tests, 58 pass, 0 fail
+```
+
+覆盖：frontmatter 解析与校验、根目录与扫描、目录聚合与遮蔽、状态存储、ZIP 与 zip-slip、写操作与回收站、插件级端到端（真实注册表 + 真实文件系统）、真实注册表集成、分层遮蔽、客户端 bundle 契约。
