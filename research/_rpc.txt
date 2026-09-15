@@ -1,0 +1,37 @@
+=== client 里的方法名字符串 ===
+"dsh.client.scope"
+"dsh.sessions.current"
+"remote.commands"
+"remote.session"
+"remote.subagents"
+=== typert 注册 ===
+'ApprovalRequestId'
+'AttachmentId'
+'CommandId'
+'CompactionId'
+'GoalId'
+'JobId'
+'LlmAttemptId'
+'MessageFeedbackVersion'
+'MessageId'
+'ProviderRequestId'
+'ReasoningEffortId'
+'SessionId'
+'SessionLogOffset'
+'SessionSeq'
+'SessionTitleProviderId'
+'TeamId'
+'TeamMessageId'
+'TeamTaskId'
+'ToolCallId'
+'WorkspaceId'
+'abandoned'
+'aborted'
+'accepted'
+'action'
+'active'
+'activeAttempt'
+'address'
+'agent'
+'agentId'
+'agentPreset'
