@@ -28,6 +28,25 @@ import { validateHost } from '../lib/routes.js'
  */
 async function boot(options = {}) {
   const agents = options.agents
+  const deferWebServer = options.deferWebServer === true
+  const deferTools = options.deferTools === true
+  let lateWebServer = false
+  let lateTools = false
+  const pending = []
+  const webServerService = {
+    register(spec) {
+      routes.push(spec)
+      return () => {
+        routes.length = 0
+      }
+    },
+  }
+  const toolsService = {
+    register(definition) {
+      tools.push(definition)
+      return () => {}
+    },
+  }
   const dir = mkdtempSync(join(tmpdir(), 'dshsm-plugin-'))
   const home = join(dir, '.dsh')
   const agentsHome = join(dir, '.agents')
@@ -57,27 +76,17 @@ async function boot(options = {}) {
       return dispose
     },
     get(service) {
-      if (service === 'webServer') {
-        return {
-          register(spec) {
-            routes.push(spec)
-            return () => {
-              routes.length = 0
-            }
-          },
-        }
-      }
-      if (service === 'tools') {
-        return {
-          register(definition) {
-            tools.push(definition)
-            return () => {}
-          },
-        }
-      }
+      // deferWebServer 模拟真机上真实发生过的时序：插件被挂载时 webServer 还没出现。
+      if (service === 'webServer') return deferWebServer && !lateWebServer ? undefined : webServerService
+      if (service === 'tools') return deferTools && !lateTools ? undefined : toolsService
+      if (service === 'webRuntime') return { trustedHosts: [] }
       // 只有显式传入时才提供 agents 服务，用来覆盖 /registry 的「有 agent」分支。
       if (service === 'agents') return agents
       return undefined
+    },
+    inject(services, callback) {
+      pending.push({ services, callback })
+      return () => {}
     },
     on() {
       return () => {}
@@ -92,7 +101,26 @@ async function boot(options = {}) {
     cwd,
     routes,
     tools,
+    pending,
+    registry: ctx.skills,
     registryReady: Boolean(ctx.skills),
+    /**
+     * 让此前缺失的服务突然出现，并触发所有在等它的延迟注入。
+     * @param {string[]} services - 出现的服务名
+     * @returns {void}
+     */
+    provide(services) {
+      for (const service of services) {
+        if (service === 'webServer') lateWebServer = true
+        if (service === 'tools') lateTools = true
+      }
+      const still = []
+      for (const item of pending.splice(0)) {
+        if (item.services.every((service) => fakeCtx.get(service) !== undefined)) item.callback(fakeCtx)
+        else still.push(item)
+      }
+      pending.push(...still)
+    },
     request: (method, path, body, host = '127.0.0.1:3080') => call(routes[0], method, path, body, host),
     cleanup: () => {
       for (const dispose of effectDisposers) if (typeof dispose === 'function') dispose()
@@ -201,6 +229,24 @@ test('工具渲染把失败结果显示成可读文本', async () => {
   }
 })
 
+test('webServer 晚于插件就绪时，路由会等它出现再注册', async () => {
+  // 这就是真机上真实发生过的时序：cordis 只等声明过的服务，插件先挂载，webServer 后到。
+  // 曾经的做法是当场 `ctx.get('webServer')` 拿到 undefined 就静默放弃 —— 服务端一切正常，
+  // 日志一片干净，只是每个请求都 404。
+  const env = await boot({ deferWebServer: true, deferTools: true })
+  try {
+    assert.equal(env.routes.length, 0, '服务未就绪时不该注册')
+    assert.equal(env.pending.length, 2, '应当挂起两处延迟注入等待服务')
+    env.provide(['webServer', 'tools'])
+    assert.equal(env.routes.length, 1, 'webServer 出现后路由必须补上')
+    assert.equal(env.tools.length, 7, 'tools 出现后工具必须补上')
+    const response = await env.request('GET', '/dsh-skills-manager/catalog')
+    assert.equal(response.ok, true)
+  } finally {
+    env.cleanup()
+  }
+})
+
 test('GET /registry 没有 agent 时退回宿主层视图', async () => {
   const env = await boot()
   try {
@@ -215,30 +261,44 @@ test('GET /registry 没有 agent 时退回宿主层视图', async () => {
   }
 })
 
-test('GET /registry 有 agent 时优先报告该 agent 所在层的裁决', async () => {
-  // 真实会话看到的是 agent 层的合并结果，而不是宿主层 —— 宿主层在真实部署里往往是空的。
-  // 这里用一个只回一条技能的假 agent 注册表，验证路由确实切到了 agent 视图。
-  const agentSkills = {
-    async snapshot() {
-      return {
-        complete: true,
-        skills: [{ name: 'from-agent', invocation: { modelInvocable: false, userInvocable: true }, provider: 'dsh-skills-manager', source: 'agent' }],
-      }
-    },
-  }
-  const env = await boot({
-    agents: {
-      list: () => [{ id: 'agent-1', ctx: { get: (service) => (service === 'skills' ? agentSkills : undefined) } }],
-    },
-  })
+test('GET /registry 有 agent 时，把该 agent 的作用域 key 传给注册表', async () => {
+  // 两条容易致命的细节在这里被钉住：
+  //  1. `snapshot()` 只按 `options.scope` 选层，不从调用上下文推断 —— 所以必须显式传，
+  //     否则读到的是 global 层（真实部署里那是空的，表现为「界面正常、查询为空」）。
+  //  2. 作用域符号是上游模块私有的（`Symbol("dsh.scope")`），本插件按符号描述去找它，
+  //     跨模块实例也不会失效。这里用一个自造的同类符号验证这条查找路径。
+  const scopeKey = { opaque: 'agent-1' }
+  const agentCtx = { get: () => undefined }
+  agentCtx[Symbol('dsh.scope')] = scopeKey
+
+  const env = await boot({ agents: { list: () => [{ id: 'agent-1', ctx: agentCtx }] } })
   try {
+    const seen = []
+    const original = env.registry.snapshot.bind(env.registry)
+    env.registry.snapshot = async (options) => {
+      seen.push(options)
+      return original(options)
+    }
     const response = await env.request('GET', '/dsh-skills-manager/registry')
     assert.equal(response.data.scope, 'agent')
-    assert.deepEqual(response.data.skills.map((s) => s.name), ['from-agent'])
-    assert.equal(response.data.skills[0].fromThisPlugin, true)
+    assert.ok(
+      seen.some((options) => options?.scope === scopeKey),
+      `路由必须把 agent 的作用域 key 传给 snapshot，实际收到：${JSON.stringify(seen.map((o) => typeof o?.scope))}`,
+    )
     assert.equal(response.data.agents[0].id, 'agent-1')
-    assert.equal(response.data.agents[0].count, 1)
-    assert.ok(response.data.host.skills.length > 0, '宿主层视图仍然照常给出，便于对照')
+    assert.ok(Array.isArray(response.data.skills))
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('agent 上下文没有作用域标记时如实报告，而不是退回 global 的空结果', async () => {
+  const agentCtx = { get: () => ({ async snapshot() { return { complete: true, skills: [] } } }) }
+  const env = await boot({ agents: { list: () => [{ id: 'agent-x', ctx: agentCtx }] } })
+  try {
+    const response = await env.request('GET', '/dsh-skills-manager/registry')
+    assert.equal(response.data.agents[0].count, null)
+    assert.match(response.data.agents[0].reason, /作用域标识/)
   } finally {
     env.cleanup()
   }
