@@ -121,3 +121,48 @@ test('buildSkillDocument 产出的文档能被自己读回', () => {
   assert.equal(read.loadable, true)
   assert.equal(read.body, 'Step one.\n')
 })
+
+// ── 与 DSH 的真实解析器保持一致 ──────────────────────────────────────────────
+// DSH 用真正的 `yaml` 库解析 frontmatter，任何解析失败都会让**整条技能被丢弃**。
+// 本模块是手写子集，只要比它宽松一点，界面就会声称一条模型从未收到过的技能"生效"。
+// 真机上就发生过：apple-liquid-glass 的长描述里有 `macOS): light grey-white ground`，
+// 冒号后跟空格在 YAML 里是嵌套映射，DSH 直接丢弃，而我们当时报 loadable=true。
+
+test('值里未加引号的冒号会让整条技能被判为不可加载', () => {
+  const doc = readSkillDocument('---\nname: demo\ndescription: 参考 macOS): 浅灰白底\n---\n正文\n')
+  assert.equal(doc.loadable, false, 'DSH 会丢弃它，我们也必须这么说')
+  const hit = doc.diagnostics.find((item) => item.code === 'frontmatter.yaml')
+  assert.ok(hit, '必须给出 frontmatter.yaml 诊断')
+  assert.equal(hit.level, 'error')
+  assert.match(hit.message, /DSH 会因此丢弃/)
+})
+
+test('加了引号的冒号是合法的，不受影响', () => {
+  const doc = readSkillDocument('---\nname: demo\ndescription: "参考 macOS): 浅灰白底"\n---\n正文\n')
+  assert.equal(doc.loadable, true, `引号包住的标量里冒号不构成嵌套映射：${JSON.stringify(doc.diagnostics)}`)
+  assert.equal(doc.description, '参考 macOS): 浅灰白底')
+})
+
+test('URL 里的冒号不误伤', () => {
+  const doc = readSkillDocument('---\nname: demo\ndescription: 见 https://example.com/docs 的说明\n---\n正文\n')
+  assert.equal(doc.loadable, true, '冒号后跟斜杠不是嵌套映射')
+})
+
+test('解析不了的行按错误处理，而不是告警', () => {
+  const doc = readSkillDocument('---\nname: demo\ndescription: 说明\n这一行没有冒号\n---\n正文\n')
+  assert.equal(doc.loadable, false)
+  const hit = doc.diagnostics.find((item) => item.code === 'frontmatter.line')
+  assert.ok(hit)
+  assert.equal(hit.level, 'error', 'DSH 会丢弃整条技能，这里报成 warn 就等于骗人')
+})
+
+test('任何 error 级诊断都会让 loadable 为假', () => {
+  for (const text of [
+    '---\nname: demo\n---\n正文\n',
+    '---\ndescription: 有描述没名字\n---\n正文\n',
+    '---\nname: demo\ndescription: 说明\ndisable-model-invocation: "true"\n---\n正文\n',
+  ]) {
+    const doc = readSkillDocument(text)
+    assert.equal(doc.loadable, false, `应当不可加载：${JSON.stringify(text)}`)
+  }
+})

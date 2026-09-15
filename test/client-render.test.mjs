@@ -164,3 +164,24 @@ test('回收站标签页显示条目计数', async () => {
   assert.match(textOf(trashTab), /1/, '回收站计数应当显示为 1')
   assert.ok(findFirst(tree, (node) => node.props?.className === 'dshsm-switch'), '技能标签页的开关仍然在')
 })
+
+test('被 DSH 丢弃的技能显示「不可加载」并禁用开关', () => {
+  // 真实案例：description 里有一段未加引号的 `): `，DSH 的 YAML 解析失败后整条丢弃。
+  // 界面必须把这件事说清楚，否则用户会以为这条技能在生效。
+  const broken = skill({
+    name: 'broken-yaml',
+    description: '坏掉的描述',
+    loadable: false,
+    winner: false,
+    diagnostics: [{ level: 'error', code: 'frontmatter.yaml', message: '第 2 行的值无法作为 YAML 标量解析，DSH 会因此丢弃整条技能' }],
+  })
+  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog({ skills: [skill({ name: 'keeper' }), broken] }) })
+  const client = loadClient({ fetch })
+  return client.mount().then((tree) => {
+    const text = textOf(tree)
+    assert.match(text, /不可加载/, '必须标出不可加载')
+    const target = switchFor(tree, 'broken-yaml')
+    assert.ok(target, '坏掉的技能也要列出来，否则用户根本不知道它为什么没生效')
+    assert.equal(target.props.disabled, true, '不可加载时开关必须禁用')
+  })
+})

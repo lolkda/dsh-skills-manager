@@ -150,31 +150,24 @@ else ctx.inject(services, (inner) => ctx.effect(() => install(inner)))
 
 它同时验证了 `lib/scope.js` 自行解析出的作用域 key 与上游 `scopeOf()` 一致。
 
-## 9. 仍然只能由一次重载完成的观测
+## 9. 会话级观测：走过三条死路，第四条通了
 
-「停用后**活动会话**的技能目录里不再列出它」—— 直接观测需要一次真实 agent 会话。三条路都走过：
+「停用后**活动会话**的技能目录里不再列出它」这一项要求一个真实 agent 会话。试过的四条路：
 
 | 路径 | 结果 |
 |---|---|
 | `sdk-minimal` profile 跑一次性任务 | 该 profile **刻意排除 skills**，插件不会挂载 |
 | web app 一次性 prompt | `dsh --profile web` 没有这个选项 |
 | 直接调 `/api` RPC 建会话 | 端点由 typert 生成，未在合理成本内定位 |
-
-用户选择自行找时间重载，所以这一项留待重载后确认。插件已为此准备好直接证据：**每个 agent 一建立就把该作用域解析出的技能写进活动日志**（`scope-snapshot` 事件）：
-
-```
-{"event":"scope-snapshot","detail":"agent <id> 的技能视图：共 9 条 —— apple-liquid-glass、…"}
-```
-
-重载后打开任意会话，这条日志就是会话级证据；此时 `GET /dsh-skills-manager/registry` 的 `scope` 也会变成 `agent`。
+| **`dsh-base` + `dsh-sdk-app` 自建 headless profile** | **成功**，见第 12 节 |
 
 ## 10. 最终代码的真机复验
 
 改完延迟注入与 scope 读法之后，用 `dsh web --port 3099 --no-open` 重新引导，跑完整流程：
 
 ```
-GET  /dsh-skills-manager/catalog            → 200
-GET  /dsh-skills-manager/registry            → scope=host  host.skills=0  agents=[]
+GET  /dsh-skills-manager/catalog                → 200
+GET  /dsh-skills-manager/registry               → scope=host  host.skills=0  agents=[]
 POST /dsh-skills-manager/policy  grilling=false → ok=true changed=true
      registry: provider=dsh-skills-manager model=false user=false
 POST /dsh-skills-manager/policy  grilling=null  → ok=true changed=true
@@ -197,18 +190,107 @@ POST /dsh-skills-manager/policy  grilling=null  → ok=true changed=true
 ## 11. 测试现状
 
 ```
-node --test  →  73 tests, 73 pass, 0 fail
+node --test  →  82 tests, 82 pass, 0 fail
 ```
 
 | 文件 | 覆盖 |
 |---|---|
-| `frontmatter.test.mjs` | frontmatter 解析、布尔极性、非法写法 |
+| `frontmatter.test.mjs` | frontmatter 解析、布尔极性、非法写法、**与 DSH 解析器的一致性** |
 | `roots.test.mjs` | 根目录发现与 rank |
-| `catalog.test.mjs` | 聚合、遮蔽、覆盖生效与 `overrideShadowed` |
+| `catalog.test.mjs` | 聚合、遮蔽、覆盖生效、**仲裁只在可加载候选之间** |
 | `registry.test.mjs` | 对**真实** `dsh-skill` + `dsh-skill-filesystem` 的集成 |
 | `layers.test.mjs` | 分层遮蔽：同层 rank 0 胜出、跨层必败 |
 | `agent-scope.test.mjs` | 走真实 `apply()` 的 agent 级端到端翻转 |
 | `plugin.test.mjs` | 插件级 HTTP 路由与工具注册、延迟注入时序、scope 传递 |
 | `client.test.mjs` | 浏览器半边契约（注册形状、模块依赖、样式注入） |
-| `client-render.test.mjs` | 浏览器半边数据流（挂载拉取、渲染、切换请求、错误显示） |
+| `client-render.test.mjs` | 浏览器半边数据流（挂载拉取、渲染、切换请求、错误显示、不可加载项） |
 | `zip.test.mjs` / `operations.test.mjs` | ZIP 与 zip-slip、新建/编辑/导入/回收站 |
+
+## 12. 会话级证据：headless profile 里的真实 agent
+
+这是目标里明确要求的那一项，也是唯一一项不能靠推断交差的。
+
+`@deepseek-ai/dsh-sdk-app` 的 patch 注释写明它是 **"over dsh-base"**，而 `dsh-base` 正好挂载
+`skill`(273) / `skill-filesystem`(276) / `tool-skill`(283)。于是 `dsh-base + dsh-sdk-app`
+就是一个**带 skills 的 headless agent**：
+
+```
+~/.dsh/profiles/skillprobe/package.json
+  dsh.profile.bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-sdk-app"]
+```
+
+这一层还有个便宜可占：`dsh-sdk-jsonrpc-server` 的 initialize 里写着
+
+```js
+if (!this.hasAdapterFor(provider)) {
+  if (provider !== "deepseek-official") throw new Error(`no adapter registered for provider "${provider}"`);
+  this.llmFiber = await this.ctx.plugin(LlmDeepSeek, {});
+}
+```
+
+所以只要 `provider` 传 `deepseek-official`，适配器由服务器自己挂上 —— 既不用装适配器包，也
+**不需要可用的 API key**：会话建立（以及随之而来的 `agent/created`）发生在模型调用之前。
+
+驱动脚本 `spike/session-probe.mjs` 说换行分隔的 JSON-RPC：`initialize` → `session/prompt`
+（未知 `sessionId` 会**懒创建 agent+session 对**）→ `shutdown`。
+配套的 `spike/policy-set.mjs` 调用插件真实的 `createRuntime()` + `setEnabled()` 改启停 ——
+不是手写 `state.json`，那样验证的就不是插件本身了。
+
+### 三次会话的对照
+
+| 会话 | 操作 | `scope-snapshot` 里的 grilling |
+|---|---|---|
+| A | 基线 | `grilling`（可用） |
+| B | 停用 grilling | `grilling（模型不可用）` |
+| C | 清除覆盖 | `grilling`（可用） |
+
+原始日志（`~/.dsh/dsh-skills-manager/dsh-skills-manager.log`）：
+
+```
+{"ts":"2026-09-15T22:21:24.287Z","event":"scope-snapshot","detail":"agent session-probe-1789510880047 的技能视图：共 8 条 —— frontend-ui-system、grill-me（模型不可用）、grilling、improve-codebase-architecture（模型不可用）、python-typed-development-standards、refactor、reverse-flow、test-driven-development"}
+{"ts":"2026-09-15T22:22:00.263Z","event":"scope-snapshot","detail":"agent session-probe-1789510916006 的技能视图：共 8 条 —— frontend-ui-system、grill-me（模型不可用）、grilling（模型不可用）、improve-codebase-architecture（模型不可用）、python-typed-development-standards、refactor、reverse-flow、test-driven-development"}
+{"ts":"2026-09-15T22:22:21.321Z","event":"scope-snapshot","detail":"agent session-probe-1789510937074 的技能视图：共 8 条 —— frontend-ui-system、grill-me（模型不可用）、grilling、improve-codebase-architecture（模型不可用）、python-typed-development-standards、refactor、reverse-flow、test-driven-development"}
+```
+
+证据来自**新建会话自己解析出的技能目录**，不是插件的状态接口，也不是自称。
+全程源文件 `~/.dsh/skills/grilling/SKILL.md` 里 `disable-model-invocation` 出现 **0** 次；
+收尾 `state.json` 为空。
+
+## 13. 由此暴露并修掉的一处诚实性 bug
+
+对账时发现：磁盘上 9 条候选，会话视图只有 8 条 —— `apple-liquid-glass` 缺席。
+
+原因是它的 `description` 是一段未加引号的长文本，里面有 `macOS): light grey-white ground`。
+冒号后跟空格在 YAML 里意味着嵌套映射，DSH 用的 `yaml` 库因此报
+`Nested mappings are not allowed in compact mappings`，**整条技能被丢弃**。
+（用 DSH 同款解析器直接验证过。）
+
+而本插件当时报的是 `loadable: true, winner: true, diagnostics: []` ——
+界面会说它生效，模型却从来没见过它。**这比不做还糟：它让用户以为自己被保护了。**
+
+两处根因，两处修复：
+
+1. `lib/frontmatter.js`
+   - 未加引号的值里出现 `: `（或以 YAML 指示符开头）→ error 诊断，并给出"把整个值用引号包起来"的修法；
+   - 解析不了的行从 `warn` 升级为 `error` —— DSH 遇到任何 YAML 失败都是整条丢弃，这里报轻了就等于骗人；
+   - `loadable` 的判据改为「没有任何 error 级诊断」。它曾经只检查几个具名字段，于是会出现
+     "解析失败但仍然 loadable=true"。
+2. `lib/catalog.js`
+   - 仲裁只在**可加载**的候选之间进行。DSH 看不到坏记录，所以它既不能胜出，也不能把后面
+     真正会被加载的那条挤成"被遮蔽"；同名技能全部不可加载时，这个名字就没有胜出者。
+
+修完后逐条吻合：
+
+```
+我们的生效集合 (8): frontend-ui-system, grill-me, grilling, improve-codebase-architecture,
+                    python-typed-development-standards, refactor, reverse-flow, test-driven-development
+DSH 会话视图 (8):   同上（逐条一致）
+apple-liquid-glass: loadable=false
+```
+
+界面本来就在详情里渲染 `diagnostics`，所以现在选中 `apple-liquid-glass` 会直接看到：
+
+> 诊断：
+> • 第 2 行的值无法作为 YAML 标量解析（冒号后跟空格会被当成嵌套映射；把整个值用引号包起来即可），DSH 会因此丢弃整条技能
+
+这个 bug 是**靠会话级证据才发现的** —— 只看宿主层或只看插件自报，两边都显示正常。

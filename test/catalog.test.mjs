@@ -121,3 +121,57 @@ test('文件不可读时记录 loadable=false 而不是抛错', () => {
     f.cleanup()
   }
 })
+
+// ── 仲裁只在可加载的候选之间进行 ─────────────────────────────────────────────
+// 真实教训：apple-liquid-glass 在 $DSH_HOME/skills 里，frontmatter 的长描述含未加引号的
+// `): ` 导致 DSH 整条丢弃。当时的目录仍把它算作"胜出且生效"，于是界面显示的生效集合
+// 比真实会话多一条 —— 而多出来的那条模型从来没见过。
+
+test('解析失败的记录不参与仲裁，也不会被当成生效', () => {
+  const f = fixture()
+  try {
+    // 项目根（rank 更低、本应胜出）里放一条 frontmatter 坏掉的同名技能。
+    writeFileSync(join(f.project.path, 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: 项目 macOS): 坏掉的这一条\n---\n项目正文\n')
+    const catalog = buildCatalog({ roots: [f.user, f.project], overrides: {} })
+
+    const broken = catalog.skills.find((s) => s.name === 'alpha' && s.rootKey === 'project-dsh@x')
+    assert.equal(broken.loadable, false)
+
+    const winner = catalog.winners.get('alpha')
+    assert.equal(winner.rootKey, 'dsh', `DSH 看不到坏掉的那条，胜出的必须是用户根，实际：${winner.rootKey}`)
+    assert.equal(winner.loadable, true)
+    assert.equal(
+      catalog.skills.filter((s) => s.name === 'alpha' && s.winner).length,
+      1,
+      '一个名字只能有一个胜出者',
+    )
+    assert.equal(broken.winner, false, '被 DSH 丢弃的记录不能标成生效')
+  } finally {
+    f.cleanup()
+  }
+})
+
+test('同名技能全部不可加载时，这个名字没有胜出者', () => {
+  const f = fixture()
+  try {
+    const broken = '---\nname: alpha\ndescription: 坏 macOS): 掉\n---\n正文\n'
+    writeFileSync(join(f.project.path, 'alpha', 'SKILL.md'), broken)
+    writeFileSync(join(f.user.path, 'alpha', 'SKILL.md'), broken)
+    const catalog = buildCatalog({ roots: [f.user, f.project], overrides: {} })
+
+    assert.equal(catalog.winners.has('alpha'), false, '没有一条能被 DSH 加载时，不该报出胜出者')
+    assert.equal(catalog.skills.filter((s) => s.name === 'alpha').every((s) => s.winner === false), true)
+  } finally {
+    f.cleanup()
+  }
+})
+
+test('胜出集合与 DSH 实际加载的集合一致（坏记录被排除）', () => {
+  const f = fixture()
+  try {
+    const effective = buildCatalog({ roots: [f.user, f.project], overrides: {} }).skills.filter((s) => s.winner).map((s) => s.name)
+    assert.deepEqual(effective.sort(), ['alpha', 'beta'], '坏掉的 broken.md 不该出现在生效集合里')
+  } finally {
+    f.cleanup()
+  }
+})
