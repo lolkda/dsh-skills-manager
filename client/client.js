@@ -36,8 +36,20 @@ window.__ModuleLoader__.load({
      * @param {object} [body] - POST 请求体
      * @returns {Promise<object>} 响应体
      */
+    /**
+     * 本次面板使用的项目目录。
+     *
+     * 服务端在没有 `cwd` 时会退化成"取某个会话的 cwd"—— 那个会话可能是任意一个，顺序也不
+     * 保证稳定。于是同一个面板的两次请求完全可能落到不同项目上，而项目级技能根
+     * （`<项目>/.dsh/skills`、`<项目>/.agents/skills`）会跟着换一套，用户却看不出任何异常。
+     * 所以第一次拿到服务端解析出的值就把它**钉住**，此后每次请求都显式带回。
+     * @type {string|null}
+     */
+    let pinnedCwd = null
+
     async function request(path, body) {
-      const response = await fetch(`${ROUTE}${path}`, {
+      const query = pinnedCwd ? `${path.includes('?') ? '&' : '?'}cwd=${encodeURIComponent(pinnedCwd)}` : ''
+      const response = await fetch(`${ROUTE}${path}${query}`, {
         method: body === undefined ? 'GET' : 'POST',
         headers: body === undefined ? undefined : { 'content-type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
@@ -416,6 +428,7 @@ window.__ModuleLoader__.load({
       const [selected, setSelected] = useState(null)
       const [mode, setMode] = useState(null)
       const [editor, setEditor] = useState(null)
+      const [cwd, setCwd] = useState(null)
 
       /**
        * 重新拉取目录。
@@ -429,6 +442,9 @@ window.__ModuleLoader__.load({
             return
           }
           setData(response.data)
+          // 钉住服务端实际用来解析项目根的那个目录，之后的请求一律显式带回。
+          if (pinnedCwd === null && response.data.cwd) pinnedCwd = response.data.cwd
+          setCwd(pinnedCwd)
           setError(null)
         } catch (failure) {
           setError(String(failure && failure.message ? failure.message : failure))
@@ -438,6 +454,17 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         reload()
       }, [reload])
+
+      /**
+       * 换一个项目目录，重新解析所有根目录。
+       * @param {string} next - 目标目录
+       * @returns {Promise<void>} 完成
+       */
+      const chooseCwd = async (next) => {
+        pinnedCwd = next
+        setCwd(next)
+        await reload()
+      }
 
       /**
        * 切换启停。
@@ -486,6 +513,7 @@ window.__ModuleLoader__.load({
       const selectedSkill = data && selected ? data.skills.find((skill) => skill.docPath === selected) : null
       const siblings = data && selectedSkill ? data.skills.filter((skill) => skill.name === selectedSkill.name) : []
       const writeRoot = roots.find((root) => root.source === 'user-dsh') ?? roots.find((root) => root.mutable)
+      const candidates = data && Array.isArray(data.candidates) ? data.candidates : []
 
       if (!data && !error) return h('div', { className: 'dshsm-section' }, h('p', { className: 'dshsm-hint' }, '正在读取技能目录…'))
 
@@ -504,6 +532,19 @@ window.__ModuleLoader__.load({
           tab === 'skills'
             ? h('input', { className: 'dshsm-search', placeholder: '搜索名字或描述', value: query, onChange: (event) => setQuery(event.target.value) })
             : null,
+        ),
+        h(
+          'div',
+          { className: 'dshsm-scope' },
+          h('span', null, '项目根按'),
+          candidates.length > 1
+            ? h(
+                'select',
+                { className: 'dshsm-scope-select', value: cwd ?? '', onChange: (event) => chooseCwd(event.target.value) },
+                candidates.map((item) => h('option', { key: item, value: item }, item)),
+              )
+            : h('code', null, cwd ?? '（未知）'),
+          h('span', { className: 'dshsm-scope-hint' }, '解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能'),
         ),
         error ? h('div', { className: 'dshsm-notice dshsm-notice--danger' }, error) : null,
         data && data.damaged ? h('div', { className: 'dshsm-notice dshsm-notice--warn' }, data.damaged) : null,
@@ -717,6 +758,10 @@ window.__ModuleLoader__.load({
     const CSS = `
 .dshsm-section { display:flex; flex-direction:column; gap:12px; font-size:13px; }
 .dshsm-bar { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.dshsm-scope { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12px; opacity:.75; }
+.dshsm-scope code { font-size:12px; }
+.dshsm-scope-select { font-size:12px; max-width:52ch; }
+.dshsm-scope-hint { opacity:.6; }
 .dshsm-tabs { display:inline-flex; gap:4px; background:rgba(127,127,127,.12); padding:3px; border-radius:8px; }
 .dshsm-tab { border:0; background:transparent; padding:5px 12px; border-radius:6px; cursor:pointer; font:inherit; color:inherit; opacity:.75; }
 .dshsm-tab--active { background:rgba(127,127,127,.22); opacity:1; font-weight:600; }

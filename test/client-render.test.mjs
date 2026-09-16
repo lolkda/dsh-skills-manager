@@ -71,6 +71,8 @@ function catalog(overrides = {}) {
       trash: [],
       damaged: null,
       logPath: null,
+      cwd: 'F:/project/alpha',
+      candidates: ['F:/project/alpha'],
       ...overrides,
     },
   }
@@ -85,7 +87,7 @@ test('挂载时拉取目录，并把技能、来源与状态渲染出来', async
   const tree = await client.mount()
 
   assert.equal(
-    fetch.calls.filter((call) => call.url === '/dsh-skills-manager/catalog' && call.method === 'GET').length,
+    fetch.calls.filter((call) => call.url.startsWith('/dsh-skills-manager/catalog') && call.method === 'GET').length,
     1,
     '挂载只该拉一次目录（依赖没写对时会反复拉）',
   )
@@ -112,12 +114,12 @@ test('点击开关发出精确的策略请求，并重新拉取目录', async ()
   target.props.onClick()
   await client.update()
 
-  const call = fetch.calls.find((item) => item.url === '/dsh-skills-manager/policy')
+  const call = fetch.calls.find((item) => item.url.startsWith('/dsh-skills-manager/policy'))
   assert.ok(call, '必须发出策略请求')
   assert.equal(call.method, 'POST')
   assert.deepEqual(call.body, { rootKey: 'agents', name: 'dropped', enabled: true }, '请求体必须精确指向该技能与目标状态')
   assert.ok(
-    fetch.calls.filter((item) => item.url === '/dsh-skills-manager/catalog').length >= 2,
+    fetch.calls.filter((item) => item.url.startsWith('/dsh-skills-manager/catalog')).length >= 2,
     '改完之后必须重新拉目录，而不是相信本地状态',
   )
 })
@@ -184,4 +186,54 @@ test('被 DSH 丢弃的技能显示「不可加载」并禁用开关', () => {
     assert.ok(target, '坏掉的技能也要列出来，否则用户根本不知道它为什么没生效')
     assert.equal(target.props.disabled, true, '不可加载时开关必须禁用')
   })
+})
+
+test('显示项目根是按哪个目录解析的', async () => {
+  // 服务端在没有 cwd 时会退化成"取某个会话的 cwd"，会话顺序不保证稳定。界面必须让用户
+  // 看见用的是哪个目录，否则项目级技能根（.dsh/skills、.agents/skills）可能悄悄换了一套。
+  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
+  const client = loadClient({ fetch })
+  const tree = await client.mount()
+  assert.match(textOf(tree), /项目根按/, '必须交代项目根的解析依据')
+  assert.match(textOf(tree), /alpha/, '要显示具体的目录')
+})
+
+test('钉住 cwd：首次拿到后用 ?cwd= 显式带回', async () => {
+  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
+  const client = loadClient({ fetch })
+  const tree = await client.mount()
+
+  const first = fetch.calls[0].url
+  assert.equal(first.includes('cwd='), false, '第一次还不知道用哪个目录，只能让服务端决定')
+
+  // 首次响应之后服务端已经告诉我们它用了什么，此后每次请求都必须带回 —— 否则同一个面板
+  // 的两次请求可能落到不同的项目上。
+  const target = switchFor(tree, 'dropped')
+  target.props.onClick()
+  await client.update()
+  const policy = fetch.calls.find((call) => call.url.startsWith('/dsh-skills-manager/policy'))
+  assert.ok(policy, '应当发出策略请求')
+  assert.match(policy.url, /cwd=F%3A%2Fproject%2Falpha/, `后续请求必须带上钉住的 cwd，实际：${policy.url}`)
+
+  const reload = fetch.calls.filter((call) => call.url.startsWith('/dsh-skills-manager/catalog')).pop()
+  assert.match(reload.url, /cwd=/, '重新拉目录时也要带上')
+})
+
+test('有多个候选目录时给出选择器，切换后按新目录重新解析', async () => {
+  const fetch = makeFetch({
+    '/dsh-skills-manager/catalog': catalog({ candidates: ['F:/project/alpha', 'F:/project/beta'] }),
+  })
+  const client = loadClient({ fetch })
+  const tree = await client.mount()
+
+  const select = findFirst(tree, (node) => node.props?.className === 'dshsm-scope-select')
+  assert.ok(select, '多于一个候选时必须是选择器，而不是替用户猜')
+  assert.equal(select.props.value, 'F:/project/alpha')
+  // children 可能是嵌套数组（组件返回数组时），直接数整棵树里的 option 更可靠。
+  assert.equal(findAll(tree, (node) => node.type === 'option').length, 2)
+
+  select.props.onChange({ target: { value: 'F:/project/beta' } })
+  await client.update()
+  const latest = fetch.calls.filter((call) => call.url.startsWith('/dsh-skills-manager/catalog')).pop()
+  assert.match(latest.url, /beta/, '切换后要按新目录重新解析')
 })

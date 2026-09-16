@@ -28,6 +28,7 @@ import { validateHost } from '../lib/routes.js'
  */
 async function boot(options = {}) {
   const agents = options.agents
+  const sessions = options.sessions
   const deferWebServer = options.deferWebServer === true
   const deferTools = options.deferTools === true
   let lateWebServer = false
@@ -82,6 +83,8 @@ async function boot(options = {}) {
       if (service === 'webRuntime') return { trustedHosts: [] }
       // 只有显式传入时才提供 agents 服务，用来覆盖 /registry 的「有 agent」分支。
       if (service === 'agents') return agents
+      // 同理，sessions 只在显式传入时提供：/catalog 的 cwd 候选列表来自它。
+      if (service === 'sessions') return sessions
       return undefined
     },
     inject(services, callback) {
@@ -457,4 +460,44 @@ test('validateHost 放行回环与受信主机', () => {
   assert.equal(validateHost({ headers: { host: 'box.local:3080' } }, ['box.local']), null)
   assert.equal(validateHost({ headers: { host: 'box.local:3080' } }, []).statusCode, 403)
   assert.equal(validateHost({ headers: {} }).statusCode, 403)
+})
+
+test('catalog 返回解析用的 cwd 与候选目录列表', async () => {
+  // 服务端在没有 cwd 时会退化成"取某个会话的 cwd"。会话可能有多个、顺序也不稳定，
+  // 所以界面必须能看到它用的是哪个目录，并在多于一个时自己选 —— 否则项目级技能根
+  // 会在用户毫无察觉的情况下换一套。
+  const sessions = {
+    list: () => [
+      { header: { cwd: 'F:/project/alpha' } },
+      { header: { cwd: 'f:/project/alpha/' } }, // Windows 上等价，必须去重
+      { header: { cwd: 'F:/project/beta' } },
+      { header: { cwd: '   ' } },
+      { header: {} },
+    ],
+  }
+  const env = await boot({ sessions })
+  try {
+    const response = await env.request('GET', '/dsh-skills-manager/catalog')
+    assert.deepEqual(Array.from(response.data.candidates), ['F:/project/alpha', 'F:/project/beta'])
+    assert.equal(response.data.cwd, 'F:/project/alpha', '默认取第一个')
+
+    const explicit = await env.request('GET', `/dsh-skills-manager/catalog?cwd=${encodeURIComponent('F:/project/beta')}`)
+    assert.equal(explicit.data.cwd, 'F:/project/beta', '显式指定的 cwd 优先')
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('没有会话时候选列表为空，而不是编一个出来', async () => {
+  const env = await boot({ sessions: { list: () => [] } })
+  try {
+    const response = await env.request('GET', '/dsh-skills-manager/catalog')
+    assert.deepEqual(Array.from(response.data.candidates), [], '没有会话就没有候选，不该凭空造一个')
+    // cwd 会退化成运行时的默认目录 —— 这是合理的兜底，但它必须**如实出现在响应里**，
+    // 界面据此告诉用户项目根是按哪个目录解析的，而不是让人以为用的就是自己的项目。
+    assert.equal(typeof response.data.cwd, 'string')
+    assert.ok(response.data.cwd.length > 0)
+  } finally {
+    env.cleanup()
+  }
 })
