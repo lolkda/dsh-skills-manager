@@ -548,3 +548,68 @@ DSH_BUNDLED_SKILL_DIR=... 会话技能视图：共 10 条 —— ... bundled-ski
 有 agent 时报「与 DSH 实际解析一致（9 条）」。
 
 顺带修了一个防护缺失：目录里若出现 `null` 记录，比对会把 `/registry` 与活动日志一起打挂。
+
+## 19. 浏览器半边真的会被加载吗：从源文件到渲染出的面板
+
+前几轮客户端都是用**仓库里的源文件**在自写的 mini React 运行时里测的。但从源文件到浏览器之间
+还有好几步：服务端要认出 manifest 里的 `dsh.client.platform: web`、把它登记进客户端模块表、
+给出带 `rev` 的 URL、再把文件送出去。任何一步断了，用户重载后看到的就是一个空面板，而仓库里
+的测试**全都是绿的**。这条链路此前一次都没验证过。
+
+### 服务端确实登记了它
+
+首页 HTML 里能找到：
+
+```
+"id":"@lolkda/dsh-skills-manager",
+"url":"/plugins/??@lolkda/dsh-skills-manager/client.js&rev=936e48f02fd1d263-51",
+"inject":["@deepseek-ai/dsh-client-ui-settings"]
+```
+
+预载清单里 174 个客户端插件，本插件在其中；连 manifest 里的 `client.inject` 都被正确读到。
+
+### 送出的字节与源文件一致
+
+```
+HTTP 200  40658 bytes     （源文件 40559 bytes）
+唯一差异：末尾被追加 `;` 与 `//# sourceMappingURL=...`
+```
+
+### 把这些字节放进运行时
+
+`spike/client-bundle-probe.mjs` 取的是那条带 `rev` 的 URL 的**真实响应**，不是本地文件
+（`test/helpers/client-harness.mjs` 的 `loadClient` 因此新增 `source` 选项）：
+
+```
+✔ 服务端把本插件登记进了客户端模块表
+✔ manifest 里的 client.inject 被正确读到
+✔ 客户端 bundle 能取到 —— HTTP 200
+✔ 模块名正确 / inject 正确 / 注册了一个设置区块 / 区块标签是「技能」/ 注入了一份样式
+✔ 面板真的渲染出了技能名
+✔ 渲染出了核对结论
+✔ 面板真的去调了后端接口
+```
+
+没有可用的无头浏览器（puppeteer/playwright/系统 Chrome 都没有），所以这是不装浏览器的前提下
+能做到的最强证据：**服务端实际送出的那些字节，确实能注册出技能面板并渲染出来**。
+
+### 顺手补上「正文查看与编辑」的真机端到端
+
+五项能力里只有这一项此前没走过真实 HTTP（第四轮是借"修 apple-liquid-glass"顺带验证的）。
+现在 `spike/lifecycle-probe.mjs` 多了一步：
+
+```
+2.5) 编辑正文
+  ✔ GET /skill/content 读到正文
+  ✔ POST /skill/save 保存成功
+  ✔ 改动后的描述出现在**模型收到的系统提示**里
+  ✔ 非法 frontmatter 被拒绝 —— "document.invalid"
+  ✔ 被拒绝的保存没有碰磁盘上的文件
+```
+
+最后两条是安全属性：这个插件的写入路径能改磁盘上的技能文件，最坏的失败是写进去一份 DSH
+读不动的文档 —— 那条技能会**静默从所有会话里消失**。所以"写坏会被拦住、且磁盘零改动"必须
+是被测过的事实，而不是设计意图。
+
+写这步时踩了一次"测试其实没测到东西"：第一版"非法"样本的 description 里**根本没有冒号**，
+于是那次保存是合法的，报错的是我的夹具而不是代码。改掉样本里的冒号后才真正测到拒绝路径。

@@ -146,10 +146,12 @@ function walk(runtime, node, nodePath = '0') {
  * 在 `node:vm` 里加载客户端 bundle。
  * @param {object} [options] - 选项
  * @param {object} [options.fetch] - fetch 替身
+ * @param {string} [options.source] - 直接给一份 bundle 源码。用于验证**服务端实际送出的字节**，
+ *   而不只是仓库里那份源文件 —— 两者之间还隔着打包与传输。
  * @returns {object} 加载结果
  */
 export function loadClient(options = {}) {
-  const source = readFileSync(CLIENT_PATH, 'utf8')
+  const source = options.source ?? readFileSync(CLIENT_PATH, 'utf8')
   let captured = null
   const styleTags = []
   const window = {
@@ -179,7 +181,7 @@ export function loadClient(options = {}) {
     fetch: options.fetch ?? (() => Promise.reject(new Error('测试里未提供 fetch'))),
   }
   sandbox.globalThis = sandbox
-  vm.runInContext(source, vm.createContext(sandbox), { filename: 'client/client.js' })
+  vm.runInContext(source, vm.createContext(sandbox), { filename: options.filename ?? 'client/client.js' })
 
   assert.ok(captured, '客户端 bundle 必须调用 window.__ModuleLoader__.load')
   assert.equal(captured.id, '@lolkda/dsh-skills-manager', 'bundle id 必须等于包名，模块系统靠它绑定 Loader 行')

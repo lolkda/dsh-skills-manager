@@ -12,8 +12,8 @@
  */
 
 import { execFile } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -74,6 +74,21 @@ async function sessionSkills() {
 }
 
 /**
+ * 起一个真实会话，连**模型收到的系统提示**一起取回来。
+ *
+ * 光看技能名不够：编辑正文要验证的是"改完之后模型看到的描述也变了"，那就得看系统提示。
+ * @param {string} dir - 会话工作目录
+ * @returns {Promise<string>} 帧内容的文本
+ */
+async function sessionPrompt(dir) {
+  const dump = join(tmpdir(), `dshsm-frames-${Date.now()}.jsonl`)
+  await run(process.execPath, [join(here, 'session-probe.mjs'), '--cwd', dir, '--dump', dump], { timeout: 120000 })
+  const text = existsSync(dump) ? readFileSync(dump, 'utf8') : ''
+  rmSync(dump, { force: true })
+  return text
+}
+
+/**
  * 断言，并记录失败而不是立刻中断 —— 收尾清理必须跑到。
  * @param {boolean} ok - 是否通过
  * @param {string} label - 描述
@@ -115,7 +130,34 @@ try {
   check(names.includes(IMPORTED), '新会话里能看到导入的技能')
   check(names.includes(CREATED), '先建的那条也还在')
 
-  console.log('\n3) 删除进回收站')
+    console.log('\n2.5) 编辑正文')
+  const content = await call(`/dsh-skills-manager/skill/content?rootKey=${encodeURIComponent(USER_ROOT)}&name=${CREATED}`)
+  check(content.ok === true, 'GET /skill/content 读到正文', JSON.stringify(content.error ?? ''))
+  // 注意这个端点是扁平的（content 在顶层），与 /catalog 的 { ok, data } 不同 —— 客户端也是这么读的。
+  check(typeof content.content === 'string' && content.content.includes(CREATED), '读回的是这个技能的文档')
+
+  const marker = `编辑验收标记-${Date.now()}`
+  const edited = content.content.replace(/^description:.*$/m, `description: ${marker}`)
+  check(edited !== content.content, '构造出了改动过的正文')
+  const saved = await call('/dsh-skills-manager/skill/save', { rootKey: USER_ROOT, name: CREATED, content: edited })
+  check(saved.ok === true, 'POST /skill/save 保存成功', JSON.stringify(saved.error ?? ''))
+
+  const prompt = await sessionPrompt(cwd)
+  check(prompt.includes(marker), '改动后的描述出现在**模型收到的系统提示**里')
+
+  // 写坏了必须被拦住：这个插件的写入路径能改磁盘上的技能文件，最坏的失败是写进去一份
+  // DSH 读不动的文档 —— 那条技能会静默从所有会话里消失。
+  const file = join(dshHome, 'skills', CREATED, 'SKILL.md')
+  const before = readFileSync(file, 'utf8')
+  const broken = await call('/dsh-skills-manager/skill/save', {
+    rootKey: USER_ROOT,
+    name: CREATED,
+    content: `---\nname: ${CREATED}\ndescription: 参考 macOS): 浅灰白底   <- 冒号后跟空格 = YAML 嵌套映射\n---\n\n正文\n`,
+  })
+  check(broken.ok === false, '非法 frontmatter 被拒绝', JSON.stringify(broken.code ?? ''))
+  check(readFileSync(file, 'utf8') === before, '被拒绝的保存没有碰磁盘上的文件')
+
+console.log('\n3) 删除进回收站')
   const trashed = await call('/dsh-skills-manager/skill/trash', { rootKey: USER_ROOT, name: CREATED })
   check(trashed.ok === true, 'POST /skill/trash 成功', JSON.stringify(trashed.error ?? ''))
   check(existsSync(join(dshHome, 'skills', CREATED, 'SKILL.md')) === false, '源文件已从技能目录移走')
