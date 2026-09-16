@@ -378,16 +378,20 @@ try {
     } catch {
       // 已经断了。
     }
+    // 必须等主进程**真的退出**再删 profile 目录：Chrome 会拉起一堆子进程，
+    // 它们还占着目录时 rmSync 报 EPERM，于是每跑一次就留下一个几十兆的临时目录。
+    const exited = new Promise((resolve) => child.once('exit', resolve))
     child.kill()
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000))])
+    for (let attempt = 0; attempt < 10; attempt += 1) {
       try {
         rmSync(profileDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 })
         break
       } catch {
-        await new Promise((resolve) => setTimeout(resolve, 600))
+        await new Promise((resolve) => setTimeout(resolve, 700))
       }
     }
+    if (existsSync(profileDir)) notes.push(`临时 profile 没能删掉，需要手工清：${profileDir}`)
   }
 }
 
