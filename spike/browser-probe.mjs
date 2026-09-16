@@ -38,6 +38,8 @@ const toggleTarget = value('toggle', '')
 const exercise = args.includes('--exercise')
 const doImportExercise = args.includes('--exercise-import')
 const doStyleAudit = args.includes('--styles')
+// 截图路径：给个 .png，会另存一张展开详情后的 `<名字>-expanded.png`。
+const shotPath = value('shot', '')
 // 默认指向真实的用户技能根 —— 演练会在这里建一条临时技能，最后再清掉。
 const skillsDir = value('skills-dir', join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh', 'skills'))
 const DEBUG_PORT = Number(value('port', '9333'))
@@ -178,10 +180,18 @@ async function exerciseImport(cdp, { skillsDir, scratchDir, notes: remarks }) {
   mkdirSync(dirPath, { recursive: true })
   writeFileSync(join(dirPath, 'SKILL.md'), doc(dirName, '由浏览器按路径导入'))
 
+  // 上一个演练结束时面板停在回收站标签页，而添加入口只在技能页渲染 —— 先切回去。
+  await cdp.evaluate(`(() => {
+    const el = Array.from(document.querySelectorAll('.dshsm-tab')).find((b) => (b.innerText || '').trim().startsWith('技能'))
+    if (el) el.click()
+    return true
+  })()`)
+  await new Promise((resolve) => setTimeout(resolve, 700))
+
   /** 打开导入表单。 */
   const openImport = () =>
     cdp.evaluate(`(() => {
-      const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === '导入技能')
+      const el = Array.from(document.querySelectorAll('button')).find((b) => ((b.innerText || '').trim() === '导入技能' || (b.innerText || '').trim().endsWith('导入技能')))
       if (!el) return false
       el.click()
       return true
@@ -216,7 +226,7 @@ async function exerciseImport(cdp, { skillsDir, scratchDir, notes: remarks }) {
   await new Promise((resolve) => setTimeout(resolve, 800))
   if (!(await openImport())) {
     // 上一次导入成功后表单会自动关闭，重新打开。
-    await cdp.evaluate(`(() => { const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === '导入技能'); if (el) el.click(); return true })()`)
+    await cdp.evaluate(`(() => { const el = Array.from(document.querySelectorAll('button')).find((b) => ((b.innerText || '').trim() === '导入技能' || (b.innerText || '').trim().endsWith('导入技能'))); if (el) el.click(); return true })()`)
     await new Promise((resolve) => setTimeout(resolve, 400))
   }
   check(await attachFile(mdPath), '导入：把单个 Markdown 塞进文件框')
@@ -229,7 +239,7 @@ async function exerciseImport(cdp, { skillsDir, scratchDir, notes: remarks }) {
 
   // ---- 从路径导入 ----
   await new Promise((resolve) => setTimeout(resolve, 800))
-  await cdp.evaluate(`(() => { const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === '导入技能'); if (el) el.click(); return true })()`)
+  await cdp.evaluate(`(() => { const el = Array.from(document.querySelectorAll('button')).find((b) => ((b.innerText || '').trim() === '导入技能' || (b.innerText || '').trim().endsWith('导入技能'))); if (el) el.click(); return true })()`)
   await new Promise((resolve) => setTimeout(resolve, 500))
   const typed = await cdp.evaluate(`(() => {
     const el = Array.from(document.querySelectorAll('.dshsm-form input')).find((i) => i.type !== 'file')
@@ -364,6 +374,15 @@ async function auditStyles(cdp, { notes: remarks }) {
       return out
     })()`)
 
+  // 演练会把面板留在回收站标签页；先切回技能页，否则第一个标签不是选中态，
+  // 颜色对不上是取样位置的问题，不是样式不一致。
+  await cdp.evaluate(`(() => {
+    const el = Array.from(document.querySelectorAll('.dshsm-tab')).find((b) => (b.innerText || '').trim().startsWith('技能'))
+    if (el) el.click()
+    return true
+  })()`)
+  await new Promise((resolve) => setTimeout(resolve, 600))
+
   const ours = await readAll(0)
   const switched = await go('提示词')
   check(switched, '切得到提示词页（用来取参考样式）')
@@ -456,10 +475,18 @@ async function exercisePanel(cdp, { skillsDir, notes: remarks }) {
       return true
     })()`)
 
-  /** 按可见文案点一个按钮。 */
+  /**
+   * 按可见文案点一个按钮。
+   *
+   * 精确匹配优先，没有再退到后缀匹配 —— 按钮上可能有装饰性前缀（添加入口的 "＋ "），
+   * 那是观感，不该让验收失败。
+   */
   const clickButton = (label) =>
     cdp.evaluate(`(() => {
-      const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === ${JSON.stringify(label)})
+      const buttons = Array.from(document.querySelectorAll('button'))
+      const want = ${JSON.stringify(label)}
+      const text = (b) => (b.innerText || '').trim()
+      const el = buttons.find((b) => text(b) === want) || buttons.find((b) => text(b).endsWith(want))
       if (!el) return false
       el.click()
       return true
@@ -469,10 +496,15 @@ async function exercisePanel(cdp, { skillsDir, notes: remarks }) {
   const hasRow = `Array.from(document.querySelectorAll('.dshsm-name')).some((el) => el.innerText.trim() === ${JSON.stringify(name)})`
 
   /** 选中某个技能行，让详情面板出现。 */
+  // 幂等：卡片是**可切换**的，详情已展开时再点一次反而会收起 —— 这里要表达的是
+  // "确保详情是打开的"，不是"点一下"。
   const selectRow = () =>
     cdp.evaluate(`(() => {
       const row = Array.from(document.querySelectorAll('.dshsm-row')).find((el) => el.querySelector('.dshsm-name')?.innerText.trim() === ${JSON.stringify(name)})
-      const main = row && row.querySelector('.dshsm-row__main')
+      if (!row) return false
+      const item = row.parentElement
+      if (item && item.querySelector('.dshsm-detail')) return true
+      const main = row.querySelector('.dshsm-row__main')
       if (!main) return false
       main.click()
       return true
@@ -745,6 +777,33 @@ try {
   check(panel.scopeLine.length > 0, '显示了项目根的解析依据', panel.scopeLine.slice(0, 120))
   if (panel.notice) notes.push(`面板提示：${panel.notice.slice(0, 200)}`)
   console.log(`     面板正文：${JSON.stringify(panel.text.slice(0, 400))}`)
+
+  if (shotPath) {
+    const shoot = async (file) => {
+      // Cdp#receive 解出来的是 message.result（payload 本身），不是整条消息。
+      const payload = await cdp.send('Page.captureScreenshot', { format: 'png' })
+      if (payload && payload.data) {
+        writeFileSync(file, Buffer.from(payload.data, 'base64'))
+        console.log(`     截图：${file}`)
+      } else {
+        console.log(`     截图失败：拿不到 PNG 数据`)
+      }
+    }
+    await cdp.evaluate(`(() => { const el = document.querySelector('.dshsm-section'); if (el) el.scrollIntoView({ block: 'start' }); return true })()`)
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    await shoot(shotPath)
+    // 再拍一张展开详情的：收起态看不出详情是不是真的长在卡片里。
+    if (panel.names.length > 0) {
+      await cdp.evaluate(`(() => {
+        const row = Array.from(document.querySelectorAll('.dshsm-row')).find((el) => el.querySelector('.dshsm-name')?.innerText.trim() === ${JSON.stringify(panel.names[0])})
+        const main = row && row.querySelector('.dshsm-row__main')
+        if (main) main.click()
+        return true
+      })()`)
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      await shoot(shotPath.replace(/\.png$/, '-expanded.png'))
+    }
+  }
 
   if (toggleTarget) {
     console.log(`\n在真实 DOM 里点「${toggleTarget}」的开关`)

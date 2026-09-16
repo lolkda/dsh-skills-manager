@@ -59,11 +59,16 @@ const buttonStartingWith = (tree, prefix) => findFirst(tree, (node) => node.type
 
 /**
  * 按按钮文案找节点。
+ *
+ * 先精确匹配；没有再退到「以该文案结尾」—— 按钮上可能有装饰性前缀（比如添加入口的
+ * `＋ `），那种前缀是观感，不该让行为测试失败。
  * @param {object} tree - 渲染树
  * @param {string} label - 文案
  * @returns {object|undefined} 节点
  */
-const buttonByText = (tree, label) => findFirst(tree, (node) => node.type === 'button' && labelOf(node) === label)
+const buttonByText = (tree, label) =>
+  findFirst(tree, (node) => node.type === 'button' && labelOf(node) === label) ??
+  findFirst(tree, (node) => node.type === 'button' && labelOf(node).endsWith(label))
 
 /**
  * 按 class 找节点。

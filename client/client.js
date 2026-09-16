@@ -158,7 +158,6 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { className: 'dshsm-detail' },
-        h('h4', { className: 'dshsm-detail__title' }, skill.name),
         h(
           'dl',
           { className: 'dshsm-kv' },
@@ -615,7 +614,7 @@ window.__ModuleLoader__.load({
         tab === 'skills' && !editor && !mode
           ? h(
               'div',
-              { className: 'dshsm-body' },
+              { className: 'dshsm-block' },
               h(
                 'div',
                 { className: 'dshsm-roots' },
@@ -634,72 +633,68 @@ window.__ModuleLoader__.load({
                   ),
                 ),
               ),
+              // 整宽单列卡片：和「插件」「模型」两页一个语言。之前把列表塞进 340px 的窄栏，
+              // 名字、描述、路径全被截断 —— 横向空间本来就够，不该分栏。
+              // 点卡片在**卡片内部**展开详情，而不是挤到旁边一栏去。
               h(
                 'div',
-                { className: 'dshsm-main' },
-                h(
-                  'div',
-                  { className: 'dshsm-list-wrap' },
-                  skills.filter((skill) => skill.winner).length === 0
-                    ? h('p', { className: 'dshsm-hint' }, '这个范围内没有技能。')
-                    : skills
-                        .filter((skill) => skill.winner)
-                        .map((skill) =>
-                          h(SkillRow, {
-                            key: skill.docPath,
-                            skill,
-                            selected: selected === skill.docPath,
-                            onSelect: () => setSelected(skill.docPath),
-                            onToggle: toggle,
-                          }),
-                        ),
-                  skills.filter((skill) => !skill.winner).length > 0
-                    ? h(
-                        'details',
-                        { className: 'dshsm-shadowed' },
-                        h('summary', null, `${skills.filter((skill) => !skill.winner).length} 条被同名技能遮蔽`),
-                        skills
-                          .filter((skill) => !skill.winner)
-                          .map((skill) =>
-                            h(SkillRow, {
-                              key: skill.docPath,
-                              skill,
-                              selected: selected === skill.docPath,
-                              onSelect: () => setSelected(skill.docPath),
-                              onToggle: toggle,
-                            }),
-                          ),
-                      )
-                    : null,
-                ),
-                h(
-                  'div',
-                  { className: 'dshsm-side' },
-                  selectedSkill
-                    ? h(Detail, {
-                        skill: selectedSkill,
-                        siblings,
-                        onEdit: () => openEditor(selectedSkill),
-                        onToggle: toggle,
-                        onTrash: async () => {
-                          const response = await request('/skill/trash', { rootKey: selectedSkill.rootKey, name: selectedSkill.name })
-                          if (!response.ok) setError(response.error ?? '删除失败')
-                          setSelected(null)
-                          await reload()
-                        },
-                      })
-                    : h(
-                        'div',
-                        { className: 'dshsm-detail dshsm-detail--empty' },
-                        h('p', { className: 'dshsm-hint' }, '选一条技能查看来源、遮蔽关系与诊断。'),
+                { className: 'dshsm-list-wrap' },
+                skills.filter((skill) => skill.winner).length === 0
+                  ? h('p', { className: 'dshsm-empty' }, '这个范围内没有技能。')
+                  : skills
+                      .filter((skill) => skill.winner)
+                      .map((skill) =>
                         h(
                           'div',
-                          { className: 'dshsm-actions' },
-                          h('button', { type: 'button', className: 'dshsm-btn dshsm-btn--primary', onClick: () => setMode('create'), disabled: !writeRoot }, '新建技能'),
-                          h('button', { type: 'button', className: 'dshsm-btn', onClick: () => setMode('import'), disabled: !writeRoot }, '导入技能'),
+                          { key: skill.docPath, className: 'dshsm-item' },
+                          h(SkillRow, {
+                            skill,
+                            selected: selected === skill.docPath,
+                            // 再点一次收起 —— 展开态是一个可切换的东西，不是「选中后不可取消」。
+                            onSelect: () => setSelected(selected === skill.docPath ? null : skill.docPath),
+                            onToggle: toggle,
+                          }),
+                          selected === skill.docPath
+                            ? h(Detail, {
+                                skill,
+                                siblings,
+                                onEdit: () => openEditor(skill),
+                                onToggle: toggle,
+                                onTrash: async () => {
+                                  const response = await request('/skill/trash', { rootKey: skill.rootKey, name: skill.name })
+                                  if (!response.ok) setError(response.error ?? '删除失败')
+                                  setSelected(null)
+                                  await reload()
+                                },
+                              })
+                            : null,
                         ),
                       ),
-                ),
+              ),
+              skills.filter((skill) => !skill.winner).length > 0
+                ? h(
+                    'details',
+                    { className: 'dshsm-shadowed' },
+                    h('summary', null, `${skills.filter((skill) => !skill.winner).length} 条被同名技能遮蔽`),
+                    skills
+                      .filter((skill) => !skill.winner)
+                      .map((skill) =>
+                        h(SkillRow, {
+                          key: skill.docPath,
+                          skill,
+                          selected: false,
+                          onSelect: () => {},
+                          onToggle: toggle,
+                        }),
+                      ),
+                  )
+                : null,
+              // 添加入口放在列表下面，用整宽虚线按钮 —— 和「模型」页的「添加提供方」一个语言。
+              h(
+                'div',
+                { className: 'dshsm-addRow' },
+                h('button', { type: 'button', className: 'dshsm-addButton', onClick: () => setMode('create'), disabled: !writeRoot }, '＋ 新建技能'),
+                h('button', { type: 'button', className: 'dshsm-addButton', onClick: () => setMode('import'), disabled: !writeRoot }, '＋ 导入技能'),
               ),
               h(
                 'p',
@@ -810,11 +805,8 @@ window.__ModuleLoader__.load({
 .dshsm-search:focus{outline:none;border-color:var(--dsw-alias-state-business-primary)}
 .dshsm-search::placeholder{color:var(--dsw-alias-label-quaternary)}
 
-.dshsm-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:16px;align-items:start}
-@media (max-width:680px){.dshsm-body{grid-template-columns:minmax(0,1fr)}}
-/* 网格项默认 min-width:auto，会撑破行内的省略号（描述、路径都得能收缩）。 */
-.dshsm-main,.dshsm-side{min-width:0}
-.dshsm-roots{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px}
+.dshsm-block{display:flex;flex-direction:column;gap:12px;min-width:0}
+.dshsm-roots{display:flex;flex-wrap:wrap;gap:6px}
 
 /* 根筛选：按钮形态，与提示词页的按钮同一套几何 */
 .dshsm-chip{box-sizing:border-box;height:28px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:14px;background:0 0;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;white-space:nowrap;cursor:pointer}
@@ -822,15 +814,21 @@ window.__ModuleLoader__.load({
 .dshsm-chip--active{border-color:transparent;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-weight:600}
 .dshsm-chip--empty{color:var(--dsw-alias-label-quaternary)}
 
-/* 一条技能 = 一张卡，与提示词页的行卡一致 */
+/* 一条技能 = 一张整宽的卡，和「插件」「模型」两页一样。
+   展开的详情是**这张卡的下半部分**：共用外框，用虚线分隔 + 平台模块底色做嵌面，
+   而不是把详情挤到旁边一栏去。 */
 .dshsm-list-wrap{display:flex;flex-direction:column;gap:8px;min-width:0}
+.dshsm-item{display:flex;flex-direction:column;min-width:0}
+.dshsm-item>.dshsm-row:not(:last-child){border-bottom-left-radius:0;border-bottom-right-radius:0}
 .dshsm-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border:.5px solid var(--dsw-alias-border-l4);border-radius:16px;min-width:0}
 .dshsm-row--selected{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dshsm-row--shadowed{opacity:.6}
 .dshsm-row__main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;margin:0;padding:0;background:0 0;border:0;text-align:left;color:inherit;font:inherit;cursor:pointer}
 .dshsm-row__title{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
-.dshsm-name{font-size:14px;font-weight:500;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dshsm-row__desc{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 标题用正文黑体，不用等宽 —— 「插件」「模型」两页的卡标题都是正常字体，
+   等宽留着给路径这类真正需要对齐的东西（.dshsm-row__meta）。 */
+.dshsm-name{font-family:inherit;font-size:14px;font-weight:500;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshsm-row__desc{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .dshsm-row__meta{font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:11px;line-height:16px;color:var(--dsw-alias-label-quaternary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshsm-row__action{display:inline-flex;align-items:center;gap:8px;margin-left:auto;flex:0 0 auto}
 
@@ -848,10 +846,9 @@ window.__ModuleLoader__.load({
 .dshsm-switch__knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-bg-base);transition:left .15s ease}
 .dshsm-switch--on .dshsm-switch__knob{left:18px}
 
-/* 详情面板，与提示词页的行卡同一套几何 */
+/* 详情：卡片的下半部分，与上半部分共用外框 */
 .dshsm-detail{display:flex;flex-direction:column;gap:12px;padding:12px 14px;border:.5px solid var(--dsw-alias-border-l4);border-radius:16px;min-width:0}
-.dshsm-detail--empty{border-style:dashed;align-items:center;text-align:center}
-.dshsm-detail__title{margin:0;font-size:14px;font-weight:500;line-height:22px;overflow-wrap:anywhere}
+.dshsm-item>.dshsm-detail{margin-top:-.5px;border-top-left-radius:0;border-top-right-radius:0;border-top-style:dashed;background:var(--dsw-alias-bg-module-platform)}
 .dshsm-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0;font-size:12px;line-height:18px}
 .dshsm-kv dt{color:var(--dsw-alias-label-tertiary)}
 .dshsm-kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
@@ -873,6 +870,17 @@ window.__ModuleLoader__.load({
 .dshsm-btn--primary:disabled{background:var(--dsw-alias-button-primary-dimmed);color:var(--dsw-alias-label-quaternary)}
 .dshsm-btn--danger{color:var(--dsw-alias-state-error-primary)}
 .dshsm-btn--danger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger)}
+
+/* 添加入口：整宽虚线按钮，照「模型」页的「添加提供方」那一行。
+   两列定宽而非 flex-wrap —— 换行阈值不该随着窗口差几个像素就改行数。 */
+.dshsm-addRow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.dshsm-addRow>:last-child:nth-child(odd){grid-column:1/-1}
+.dshsm-addButton{height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px dashed var(--dsw-alias-border-l3);border-radius:16px;background:0 0;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;cursor:pointer}
+.dshsm-addButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.dshsm-addButton:disabled{color:var(--dsw-alias-label-quaternary);cursor:default}
+
+/* 空列表：虚线框居中，照提示词页的空态 */
+.dshsm-empty{margin:0;padding:14px;border:.5px dashed var(--dsw-alias-border-l3);border-radius:16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 
 .dshsm-editor,.dshsm-form{display:flex;flex-direction:column;gap:12px;min-width:0}
 .dshsm-editor__head{margin:0;font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:11px;line-height:16px;color:var(--dsw-alias-label-quaternary);overflow-wrap:anywhere}
