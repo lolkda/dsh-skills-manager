@@ -17,6 +17,7 @@
  */
 
 import { spawn } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -40,6 +41,7 @@ function options() {
     session: value('session', `session-probe-${Date.now()}`),
     profile: value('profile', 'skillprobe'),
     settleMs: Number(value('settle', '9000')),
+    dump: value('dump', ''),
   }
 }
 
@@ -122,6 +124,12 @@ try {
 } finally {
   await sleep(500)
   child.kill()
+  // `--dump` 把所有帧写成一个文件：会话事件里带着 agent 实际拿到的工具清单，
+  // 这是"工具真的到达了会话"与"插件自己说注册了工具"之间的区别。
+  if (opts.dump) {
+    writeFileSync(opts.dump, `${frames.map((frame) => JSON.stringify(frame)).join('\n')}\n`, 'utf8')
+    console.log(`[probe] 全部帧已写入 ${opts.dump}`)
+  }
   console.log(`[probe] 会话 id: ${opts.session}`)
   console.log(`[probe] 通知/事件帧数: ${frames.filter((frame) => frame.method).length}`)
   const methods = [...new Set(frames.filter((frame) => frame.method).map((frame) => frame.method))]
