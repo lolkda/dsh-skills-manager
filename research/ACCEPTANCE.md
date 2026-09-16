@@ -394,3 +394,39 @@ skills_list    skills_set_enabled          skills_update
    现在清空后重新取一次目录再判。
 
 这两条都不影响插件本身，但它们是同一类错误：**结论跑在了证据前面**。
+
+## 16. 项目级技能根会解析到错误目录（本轮修掉）
+
+目标里明确要求管理项目级根（`<项目>/.dsh/skills`、`<项目>/.agents/skills`）。查客户端时发现：
+`request()` **从不传 `cwd`**，服务端于是退化成 `sessionCwd(ctx)` —— 取"某个会话的 cwd"。
+实测同一个面板两次调用的结果：
+
+```
+不带 cwd  → cwd = C:\Users\Administrator\.dsh\profiles\web
+            project-dsh@c:/users/administrator/.dsh/profiles/web
+显式 cwd  → cwd = F:/project/dsh-skills-manager
+            project-dsh@f:/project/dsh-skills-manager
+```
+
+会话可能有多个、顺序也不保证稳定，所以**同一个面板的两次请求完全可能落到不同项目上**，
+项目级技能根会跟着换一套，而用户看不出任何异常。这正是前几轮反复出现的那类错误：
+结论跑在证据前面。
+
+三处修改：
+
+1. `lib/routes.js`：新增 `sessionCwds(ctx)` 返回去重后的候选目录（Windows 路径大小写不敏感、
+   结尾斜杠等价，统一后去重）；`/catalog` 响应同时给出 `cwd`（实际用来解析的那个）与
+   `candidates`。`sessionCwd()` 保留为"取第一个"，但文档写明它只是默认值。
+2. `client/client.js`：第一次拿到服务端解析出的 `cwd` 就**钉住**它，此后每次请求都显式用
+   `?cwd=` 带回（一处闭包变量，9 个调用点自动覆盖）。
+3. 界面显示"项目根按 <目录>"；候选多于一个时给选择器，由用户决定，而不是替他猜。
+
+真机复验（`dsh web --port 3099`）：
+
+```
+不带 cwd  → cwd = C:\Users\Administrator\.dsh\profiles\web   candidates = []
+显式 cwd  → cwd = F:/project/dsh-skills-manager
+两种情况下 project 根的 key 与路径都随之改变 —— 这正是修复要保证的
+```
+
+改完重跑完整生命周期，17 项全过；测试 87 项全通过。
