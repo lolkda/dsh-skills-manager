@@ -13,7 +13,7 @@
  */
 
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -33,6 +33,9 @@ const base = value('base', 'http://127.0.0.1:3099')
 const logPath = value('log', '')
 const keepOpen = args.includes('--keep-open')
 const toggleTarget = value('toggle', '')
+const exercise = args.includes('--exercise')
+// 默认指向真实的用户技能根 —— 演练会在这里建一条临时技能，最后再清掉。
+const skillsDir = value('skills-dir', join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh', 'skills'))
 const DEBUG_PORT = Number(value('port', '9333'))
 
 const failures = []
@@ -144,6 +147,149 @@ async function waitFor(cdp, expression, timeoutMs = 20000, label = expression) {
   }
 }
 
+/**
+ * 在真实 DOM 里走一遍 新建 → 编辑 → 删除进回收站 → 恢复 → 永久删除。
+ *
+ * 这是目标里另外三项能力（正文查看与编辑、新建、删除+回收站+恢复）在真实浏览器里的验收。
+ * 会往真实的 `$DSH_HOME/skills` 写一条名字一眼可辨的临时技能，最后连回收站一起清干净 ——
+ * 做完之后磁盘上不留任何痕迹。
+ * @param {Cdp} cdp - 客户端
+ * @param {object} options - 参数
+ * @param {string} options.skillsDir - 用户技能根
+ * @param {string[]} options.notes - 备注收集
+ * @returns {Promise<void>} 完成
+ */
+async function exercisePanel(cdp, { skillsDir, notes: remarks }) {
+  const name = 'browser-probe-tmp'
+  const skillFile = join(skillsDir, name, 'SKILL.md')
+  const marker = `浏览器验收标记 ${Date.now() % 100000}`
+
+  /**
+   * 往 React 受控输入里写值。
+   *
+   * 直接改 `el.value` 是没用的：React 的 value tracker 认为值没变，onChange 不会触发。
+   * 必须走**原生 setter**，再派发一个会冒泡的 input 事件 —— 这才是浏览器里"人打字"的样子。
+   * @param {string} selectorExpression - 求值为目标元素的表达式
+   * @param {string} value - 值
+   * @returns {Promise<boolean>} 是否写进去了
+   */
+  const typeInto = (selectorExpression, value) =>
+    cdp.evaluate(`(() => {
+      const el = ${selectorExpression}
+      if (!el) return false
+      const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(value)})
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      return true
+    })()`)
+
+  /** 按可见文案点一个按钮。 */
+  const clickButton = (label) =>
+    cdp.evaluate(`(() => {
+      const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === ${JSON.stringify(label)})
+      if (!el) return false
+      el.click()
+      return true
+    })()`)
+
+  /** 某个技能行在不在。 */
+  const hasRow = `Array.from(document.querySelectorAll('.dshsm-name')).some((el) => el.innerText.trim() === ${JSON.stringify(name)})`
+
+  /** 选中某个技能行，让详情面板出现。 */
+  const selectRow = () =>
+    cdp.evaluate(`(() => {
+      const row = Array.from(document.querySelectorAll('.dshsm-row')).find((el) => el.querySelector('.dshsm-name')?.innerText.trim() === ${JSON.stringify(name)})
+      const main = row && row.querySelector('.dshsm-row__main')
+      if (!main) return false
+      main.click()
+      return true
+    })()`)
+
+  /** 切到回收站标签。 */
+  const openTrashTab = () =>
+    cdp.evaluate(`(() => {
+      const tab = Array.from(document.querySelectorAll('.dshsm-tab')).find((el) => (el.innerText || '').trim().startsWith('回收站'))
+      if (!tab) return false
+      tab.click()
+      return true
+    })()`)
+
+  /** 切回「技能」标签。 */
+  const openSkillsTab = () =>
+    cdp.evaluate(`(() => {
+      const tab = Array.from(document.querySelectorAll('.dshsm-tab')).find((el) => (el.innerText || '').trim().startsWith('技能'))
+      if (!tab) return false
+      tab.click()
+      return true
+    })()`)
+
+  // ---- 新建 ----
+  check(await clickButton('新建技能'), '新建：打开表单')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  check(
+    await typeInto(`Array.from(document.querySelectorAll('.dshsm-form input'))[0]`, name),
+    '新建：填名字',
+  )
+  await typeInto(`Array.from(document.querySelectorAll('.dshsm-form input'))[1]`, '浏览器验收用的临时技能')
+  check(
+    await typeInto(`document.querySelector('.dshsm-form textarea')`, `# 正文${'\n'}${'\n'}由浏览器探针创建。`),
+    '新建：填正文',
+  )
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  check(await clickButton('创建'), '新建：点创建')
+  check(await waitFor(cdp, hasRow, 15000, '新技能出现在列表里'), '新建：列表里出现了它')
+  check(existsSync(skillFile), '新建：磁盘上出现了 SKILL.md')
+
+  // ---- 编辑 ----
+  check(await selectRow(), '编辑：选中它')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  check(await clickButton('编辑正文'), '编辑：打开编辑器')
+  const editorReady = await waitFor(cdp, 'document.querySelector(".dshsm-editor textarea") !== null', 10000, '编辑器出现')
+  check(editorReady, '编辑：编辑器出来了')
+  const current = await cdp.evaluate('document.querySelector(".dshsm-editor textarea").value')
+  check(typeof current === 'string' && current.includes('name:'), '编辑：编辑器里是这条技能的原文')
+  const edited = `${current.trimEnd()}${'\n'}${'\n'}${marker}${'\n'}`
+  check(await typeInto('document.querySelector(".dshsm-editor textarea")', edited), '编辑：改了正文')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  check(await clickButton('保存'), '编辑：点保存')
+  const saved = await waitFor(cdp, 'document.querySelector(".dshsm-editor") === null', 15000, '保存后编辑器关闭')
+  check(saved, '编辑：保存后编辑器关闭（说明服务端接受了）')
+  check(existsSync(skillFile) && readFileSync(skillFile, 'utf8').includes(marker), '编辑：改动真的写进了磁盘')
+
+  // ---- 删除进回收站 ----
+  check(await selectRow(), '删除：选中它')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  check(await clickButton('移到回收站'), '删除：点移到回收站')
+  const gone = await waitFor(cdp, `!(${hasRow})`, 15000, '列表里不再有它')
+  check(gone, '删除：列表里不再有它')
+  check(!existsSync(skillFile), '删除：源文件已经从技能目录移走')
+  check(await openTrashTab(), '删除：切到回收站标签')
+  const inTrash = await waitFor(cdp, hasRow, 10000, '回收站里出现了它')
+  check(inTrash, '删除：回收站里能找到它')
+
+  // ---- 恢复 ----
+  check(await clickButton('恢复'), '恢复：点恢复')
+  const backOnDisk = await waitFor(cdp, hasRow, 15000, '恢复后回收站里不再有它')
+  check(backOnDisk, '恢复：回收站里的条目消失了')
+  await new Promise((resolve) => setTimeout(resolve, 600))
+  check(existsSync(skillFile), '恢复：文件回到了技能目录')
+  check(readFileSync(skillFile, 'utf8').includes(marker), '恢复：内容一字不差')
+
+  // ---- 清场：删掉并永久删除 ----
+  // 恢复之后界面还停在回收站标签页，而那里已经没有它了 —— 必须切回「技能」再操作。
+  check(await openSkillsTab(), '清场：切回技能标签')
+  await new Promise((resolve) => setTimeout(resolve, 600))
+  check(await selectRow(), '清场：选中它')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  check(await clickButton('移到回收站'), '清场：再移进回收站')
+  check(await waitFor(cdp, `!(${hasRow})`, 15000, '再次移走'), '清场：列表里再次消失')
+  check(await openTrashTab(), '清场：切到回收站')
+  await new Promise((resolve) => setTimeout(resolve, 600))
+  check(await clickButton('永久删除'), '清场：点永久删除')
+  check(await waitFor(cdp, `!(${hasRow})`, 15000, '回收站里也没有了'), '清场：回收站里也没了')
+  check(!existsSync(join(skillsDir, name)), '清场：磁盘上不留痕迹')
+}
+
 const chrome = CHROME_CANDIDATES.find((path) => path && existsSync(path))
 if (!chrome) {
   console.log('机器上找不到 Chrome / Edge，跳过浏览器验收。')
@@ -163,6 +309,34 @@ for (const path of logs) {
 check(token.length > 0, '从启动日志里取到访问 token')
 
 const profileDir = mkdtempSync(join(tmpdir(), 'dshsm-chrome-'))
+
+// 顺手扫掉上一次跑剩下的 profile：Chrome 的句柄在进程退出后还要过一会儿才释放，所以上一次
+// 退出时删不掉的目录，现在一定删得掉。开跑前清一遍，临时目录就不会越积越多。
+let swept = 0
+try {
+  for (const entry of readdirSync(tmpdir())) {
+    if (!entry.startsWith('dshsm-chrome-') || join(tmpdir(), entry) === profileDir) continue
+    const stale = join(tmpdir(), entry)
+    try {
+      rmSync(stale, { recursive: true, force: true })
+    } catch {
+      // profile 里有 reparse point，Node 删不动 —— 交给 PowerShell。
+      await new Promise((resolve) => {
+        const fallback = spawn(
+          'powershell',
+          ['-NoProfile', '-NonInteractive', '-Command', `Remove-Item -LiteralPath '${stale}' -Recurse -Force -ErrorAction SilentlyContinue`],
+          { stdio: 'ignore' },
+        )
+        fallback.on('close', resolve)
+        fallback.on('error', resolve)
+      })
+    }
+    if (!existsSync(stale)) swept += 1
+  }
+} catch {
+  // 临时目录读不到就算了，不影响验收。
+}
+if (swept > 0) console.log(`顺手清掉上一次剩下的 ${swept} 个临时 profile`)
 const child = spawn(
   chrome,
   [
@@ -361,6 +535,11 @@ try {
     if (after.notice) notes.push(`操作后的提示：${after.notice.slice(0, 200)}`)
   }
 
+  if (exercise) {
+    console.log('\n在真实 DOM 里走一遍 新建 → 编辑 → 删除 → 恢复 → 永久删除')
+    await exercisePanel(cdp, { skillsDir, notes })
+  }
+
   console.log('\n看看有没有 JS 报错')
   const errors = cdp.events
     .filter((event) => event.method === 'Runtime.exceptionThrown' || (event.method === 'Log.entryAdded' && event.params?.entry?.level === 'error'))
@@ -370,6 +549,20 @@ try {
 } catch (error) {
   check(false, `浏览器验收中断：${error instanceof Error ? error.message : String(error)}`)
 } finally {
+  // 保险：不管演练在哪一步炸了，都不许把临时技能留在用户的技能目录里。
+  // 上一次就是清场那几步断言失败、界面停在回收站标签页，结果 `browser-probe-tmp`
+  // 真的进了模型可见的技能清单 —— 验收工具本身污染被验收的环境，是最不该发生的事。
+  if (exercise) {
+    const leftover = join(skillsDir, 'browser-probe-tmp')
+    if (existsSync(leftover)) {
+      try {
+        rmSync(leftover, { recursive: true, force: true })
+        notes.push('保险生效：临时技能已从磁盘上兜底清除')
+      } catch {
+        notes.push(`兜底清除失败，请手工删除：${leftover}`)
+      }
+    }
+  }
   if (keepOpen) {
     console.log(`\nChrome 保持运行：http://127.0.0.1:${DEBUG_PORT}/json/list（user-data-dir=${profileDir}）`)
   } else {
@@ -378,20 +571,57 @@ try {
     } catch {
       // 已经断了。
     }
-    // 必须等主进程**真的退出**再删 profile 目录：Chrome 会拉起一堆子进程，
-    // 它们还占着目录时 rmSync 报 EPERM，于是每跑一次就留下一个几十兆的临时目录。
+    // 必须等整个 Chrome 进程树**真的退出**再删 profile 目录。
+    // 两个坑：一是 `child.kill()` 在 Windows 上只杀直接子进程，Chrome 拉起的那一堆
+    // renderer / gpu / crashpad 还活着；二是它们活着时占着目录，rmSync 报 EPERM，
+    // 于是每跑一次就在临时目录留下十几兆。用 taskkill /T 连整棵树一起收。
     const exited = new Promise((resolve) => child.once('exit', resolve))
-    child.kill()
-    await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000))])
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      try {
-        rmSync(profileDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 })
-        break
-      } catch {
-        await new Promise((resolve) => setTimeout(resolve, 700))
-      }
+    if (process.platform === 'win32' && child.pid) {
+      await new Promise((resolve) => {
+        const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+        killer.on('close', resolve)
+        killer.on('error', resolve)
+      })
+    } else {
+      child.kill()
     }
-    if (existsSync(profileDir)) notes.push(`临时 profile 没能删掉，需要手工清：${profileDir}`)
+    await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 8000))])
+    // Chrome 的进程没了，但 Windows 释放它的文件句柄还要一小会儿 —— 此时删会报 EPERM，
+    // 而同样的目录过几秒 PowerShell 一句话就删掉了。所以交替用两种办法重试，给足时间。
+    let lastError
+    for (let attempt = 0; attempt < 24 && existsSync(profileDir); attempt += 1) {
+      try {
+        rmSync(profileDir, { recursive: true, force: true, maxRetries: 2, retryDelay: 200 })
+      } catch (error) {
+        lastError = error
+      }
+      if (existsSync(profileDir)) {
+        // Chrome 的 profile 里有 reparse point（符号链接一类），Node 的 rmSync 和 cmd 的
+        // rmdir 都不肯穿过去 —— 只有 PowerShell 的 Remove-Item 删得掉。实测过：同一个目录
+        // 前两者报 EPERM，PowerShell 一句话就清空了。
+        await new Promise((resolve) => {
+          const fallback = spawn(
+            'powershell',
+            ['-NoProfile', '-NonInteractive', '-Command', `Remove-Item -LiteralPath '${profileDir}' -Recurse -Force -ErrorAction SilentlyContinue`],
+            { stdio: 'ignore' },
+          )
+          fallback.on('close', resolve)
+          fallback.on('error', resolve)
+        })
+      }
+      if (!existsSync(profileDir)) break
+      await new Promise((resolve) => setTimeout(resolve, 800))
+    }
+    if (existsSync(profileDir)) {
+      // 本进程里删不掉，而且不该再假装能删掉：实测过退出后 150 秒仍然 EPERM，此时机器上
+      // **没有任何 chrome 进程**（连无头的都没有）。最像的原因是杀毒软件在扫描刚写出来的
+      // 几千个小文件、句柄要几分钟才放。
+      //
+      // 所以不在这里空转：本次留下的这一个，下次开跑时的清扫会收掉（那条路径实测有效）。
+      // 删不掉就明确报出来，而不是静默留一堆垃圾。
+      notes.push(`本次的临时 profile 暂留（${lastError?.code ?? '未知'}）：${profileDir}`)
+      notes.push(`下次运行本探针会自动清扫；想立刻清：Remove-Item -LiteralPath '${profileDir}' -Recurse -Force`)
+    }
   }
 }
 
