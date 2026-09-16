@@ -784,71 +784,112 @@ window.__ModuleLoader__.load({
      * 用半透明黑/白叠加而不是写死颜色，这样在 DSH 的浅色与深色主题下都可读，
      * 而不必依赖任何具体的主题变量名。
      */
+    // 样式对齐 `@lolkda/dsh-prompt-manager`：同一套 `--dsw-alias-*` 设计令牌、同一套几何。
+    // 关键不是"看起来像"，而是**颜色全部走令牌** —— 硬编码的 rgba 不会跟随明暗主题，
+    // 这正是之前和设置里其它页面放在一起时最刺眼的地方。
+    // 几何照抄：卡片 12/14px 内距 + .5px 发丝边 + 16px 圆角；按钮 28px 高（primary 32px）、
+    // 圆角 14/16px；输入框 32px 高、8px 圆角；tab 是朴素文字加 2px 下划线。
     const CSS = `
-.dshsm-section { display:flex; flex-direction:column; gap:12px; font-size:13px; }
-.dshsm-bar { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-.dshsm-scope { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12px; opacity:.75; }
-.dshsm-scope code { font-size:12px; }
-.dshsm-scope-select { font-size:12px; max-width:52ch; }
-.dshsm-scope-hint { opacity:.6; }
-.dshsm-tabs { display:inline-flex; gap:4px; background:rgba(127,127,127,.12); padding:3px; border-radius:8px; }
-.dshsm-tab { border:0; background:transparent; padding:5px 12px; border-radius:6px; cursor:pointer; font:inherit; color:inherit; opacity:.75; }
-.dshsm-tab--active { background:rgba(127,127,127,.22); opacity:1; font-weight:600; }
-.dshsm-search { flex:0 1 240px; padding:6px 10px; border-radius:8px; border:1px solid rgba(127,127,127,.35); background:transparent; color:inherit; font:inherit; }
-.dshsm-body { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,340px); gap:16px; align-items:start; }
-@media (max-width: 900px) { .dshsm-body { grid-template-columns:minmax(0,1fr); } }
-.dshsm-roots { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:6px; }
-.dshsm-chip { border:1px solid rgba(127,127,127,.3); background:transparent; color:inherit; padding:4px 10px; border-radius:999px; cursor:pointer; font:inherit; font-size:12px; opacity:.85; }
-.dshsm-chip--active { background:rgba(127,127,127,.2); opacity:1; font-weight:600; }
-.dshsm-chip--empty { opacity:.45; }
-.dshsm-list-wrap { display:flex; flex-direction:column; gap:6px; min-width:0; }
-.dshsm-row { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:10px; border:1px solid rgba(127,127,127,.2); }
-.dshsm-row--selected { border-color:rgba(90,150,255,.75); background:rgba(90,150,255,.08); }
-.dshsm-row--shadowed { opacity:.6; }
-.dshsm-row__main { flex:1 1 auto; min-width:0; cursor:pointer; display:flex; flex-direction:column; gap:3px; }
-.dshsm-row__title { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-.dshsm-name { font-weight:600; font-size:13px; }
-.dshsm-row__desc { opacity:.8; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-.dshsm-row__meta { opacity:.5; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.dshsm-row__action { display:flex; gap:6px; align-items:center; }
-.dshsm-pill { font-size:11px; padding:1px 7px; border-radius:999px; background:rgba(127,127,127,.18); white-space:nowrap; }
-.dshsm-pill--warn { background:rgba(230,170,40,.22); }
-.dshsm-pill--danger { background:rgba(230,80,80,.2); }
-.dshsm-pill--source { background:rgba(90,150,255,.2); }
-.dshsm-switch { width:36px; height:20px; border-radius:999px; border:0; background:rgba(127,127,127,.4); position:relative; cursor:pointer; padding:0; flex:0 0 auto; }
-.dshsm-switch--on { background:rgba(60,170,110,.85); }
-.dshsm-switch:disabled { opacity:.4; cursor:not-allowed; }
-.dshsm-switch__knob { position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .15s ease; }
-.dshsm-switch--on .dshsm-switch__knob { left:18px; }
-.dshsm-detail { border:1px solid rgba(127,127,127,.25); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:10px; min-width:0; }
-.dshsm-detail--empty { border-style:dashed; }
-.dshsm-detail__title { margin:0; font-size:14px; }
-.dshsm-kv { display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 10px; margin:0; font-size:12px; }
-.dshsm-kv dt { opacity:.6; }
-.dshsm-kv dd { margin:0; min-width:0; overflow-wrap:anywhere; }
-.dshsm-notice { border-radius:8px; padding:8px 10px; font-size:12px; background:rgba(127,127,127,.12); }
-.dshsm-notice--ok { background:rgba(46,160,67,.14); }
-.dshsm-notice--warn { background:rgba(230,170,40,.16); }
-.dshsm-notice--danger { background:rgba(230,80,80,.14); }
-.dshsm-list { margin:6px 0 0; padding-left:18px; }
-.dshsm-actions { display:flex; gap:8px; flex-wrap:wrap; }
-.dshsm-btn { border:1px solid rgba(127,127,127,.35); background:transparent; color:inherit; padding:5px 12px; border-radius:8px; cursor:pointer; font:inherit; font-size:12px; }
-.dshsm-btn:hover:not(:disabled) { background:rgba(127,127,127,.14); }
-.dshsm-btn:disabled { opacity:.45; cursor:not-allowed; }
-.dshsm-btn--primary { background:rgba(90,150,255,.2); border-color:rgba(90,150,255,.5); }
-.dshsm-btn--danger { border-color:rgba(230,80,80,.45); }
-.dshsm-editor, .dshsm-form { display:flex; flex-direction:column; gap:10px; }
-.dshsm-editor__head { font-size:11px; opacity:.6; overflow-wrap:anywhere; }
-.dshsm-textarea { width:100%; min-height:320px; resize:vertical; padding:10px; border-radius:8px; border:1px solid rgba(127,127,127,.35); background:transparent; color:inherit; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; line-height:1.55; }
-.dshsm-textarea--short { min-height:140px; }
-.dshsm-field { display:flex; flex-direction:column; gap:4px; font-size:12px; }
-.dshsm-field span { opacity:.7; }
-.dshsm-field input { padding:6px 10px; border-radius:8px; border:1px solid rgba(127,127,127,.35); background:transparent; color:inherit; font:inherit; }
-.dshsm-check { display:flex; align-items:center; gap:6px; font-size:12px; }
-.dshsm-hint { opacity:.6; font-size:12px; margin:0; }
-.dshsm-foot { opacity:.55; font-size:11px; margin:0; }
-.dshsm-shadowed { margin-top:8px; }
-.dshsm-shadowed summary { cursor:pointer; font-size:12px; opacity:.7; margin-bottom:6px; }
+.dshsm-section{max-width:760px;min-width:0;display:flex;flex-direction:column;gap:12px;padding-bottom:12px;color:var(--dsw-alias-label-primary)}
+
+.dshsm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.dshsm-scope{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}
+.dshsm-scope code{font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:12px}
+.dshsm-scope-select{box-sizing:border-box;height:32px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;max-width:52ch}
+.dshsm-scope-select:focus{outline:none;border-color:var(--dsw-alias-state-business-primary)}
+.dshsm-scope-hint{color:var(--dsw-alias-label-quaternary)}
+
+/* tab 行：朴素文字，选中的加下划线，底下一条发丝线 */
+.dshsm-tabs{display:flex;align-items:flex-end;gap:22px;margin-top:2px;border-bottom:.5px solid var(--dsw-alias-border-l2)}
+.dshsm-tab{position:relative;background:0 0;border:0;padding:7px 1px 9px;font:inherit;font-size:13px;line-height:20px;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.dshsm-tab:hover{color:var(--dsw-alias-label-primary)}
+.dshsm-tab--active{color:var(--dsw-alias-label-primary)}
+.dshsm-tab--active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px 2px 0 0;background:var(--dsw-alias-label-primary)}
+
+.dshsm-search{box-sizing:border-box;flex:0 1 240px;height:32px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
+.dshsm-search:focus{outline:none;border-color:var(--dsw-alias-state-business-primary)}
+.dshsm-search::placeholder{color:var(--dsw-alias-label-quaternary)}
+
+.dshsm-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:16px;align-items:start}
+@media (max-width:680px){.dshsm-body{grid-template-columns:minmax(0,1fr)}}
+/* 网格项默认 min-width:auto，会撑破行内的省略号（描述、路径都得能收缩）。 */
+.dshsm-main,.dshsm-side{min-width:0}
+.dshsm-roots{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px}
+
+/* 根筛选：按钮形态，与提示词页的按钮同一套几何 */
+.dshsm-chip{box-sizing:border-box;height:28px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:14px;background:0 0;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;white-space:nowrap;cursor:pointer}
+.dshsm-chip:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dshsm-chip--active{border-color:transparent;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-weight:600}
+.dshsm-chip--empty{color:var(--dsw-alias-label-quaternary)}
+
+/* 一条技能 = 一张卡，与提示词页的行卡一致 */
+.dshsm-list-wrap{display:flex;flex-direction:column;gap:8px;min-width:0}
+.dshsm-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border:.5px solid var(--dsw-alias-border-l4);border-radius:16px;min-width:0}
+.dshsm-row--selected{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.dshsm-row--shadowed{opacity:.6}
+.dshsm-row__main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;margin:0;padding:0;background:0 0;border:0;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.dshsm-row__title{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.dshsm-name{font-size:14px;font-weight:500;line-height:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshsm-row__desc{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshsm-row__meta{font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:11px;line-height:16px;color:var(--dsw-alias-label-quaternary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshsm-row__action{display:inline-flex;align-items:center;gap:8px;margin-left:auto;flex:0 0 auto}
+
+/* 小徽章，与提示词页的 badge 一致 */
+.dshsm-pill{flex:0 0 auto;padding:1px 6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:4px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dshsm-pill--warn{border-style:dashed;color:var(--dsw-alias-state-warn-primary)}
+.dshsm-pill--danger{border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
+.dshsm-pill--source{font-family:var(--ds-font-family-code,ui-monospace,monospace)}
+.dshsm-pill--off{color:var(--dsw-alias-label-quaternary)}
+
+/* 开关：提示词页没有这个控件，用同一套令牌自造一个 */
+.dshsm-switch{position:relative;flex:0 0 auto;width:36px;height:20px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-border-l3);cursor:pointer}
+.dshsm-switch--on{background:var(--dsw-alias-state-success-primary)}
+.dshsm-switch:disabled{opacity:.5;cursor:default}
+.dshsm-switch__knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-bg-base);transition:left .15s ease}
+.dshsm-switch--on .dshsm-switch__knob{left:18px}
+
+/* 详情面板，与提示词页的行卡同一套几何 */
+.dshsm-detail{display:flex;flex-direction:column;gap:12px;padding:12px 14px;border:.5px solid var(--dsw-alias-border-l4);border-radius:16px;min-width:0}
+.dshsm-detail--empty{border-style:dashed;align-items:center;text-align:center}
+.dshsm-detail__title{margin:0;font-size:14px;font-weight:500;line-height:22px;overflow-wrap:anywhere}
+.dshsm-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0;font-size:12px;line-height:18px}
+.dshsm-kv dt{color:var(--dsw-alias-label-tertiary)}
+.dshsm-kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+
+/* 提示块：用平台模块底色做嵌面，语气靠文字色表达（和提示词页的 status 一致） */
+.dshsm-notice{display:flex;flex-direction:column;gap:6px;min-width:0;margin:0;padding:10px 12px;border-radius:12px;background:var(--dsw-alias-bg-module-platform);font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
+.dshsm-notice--ok{color:var(--dsw-alias-state-success-primary)}
+.dshsm-notice--warn{color:var(--dsw-alias-state-warn-primary)}
+.dshsm-notice--danger{color:var(--dsw-alias-state-error-primary)}
+.dshsm-list{margin:0;padding-left:18px}
+.dshsm-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* 按钮：三种形态，与提示词页一致 */
+.dshsm-btn{box-sizing:border-box;height:28px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:14px;background:0 0;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;white-space:nowrap;cursor:pointer}
+.dshsm-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.dshsm-btn:disabled{color:var(--dsw-alias-label-quaternary);border-color:var(--dsw-alias-border-l4);cursor:default}
+.dshsm-btn--primary{height:32px;padding:0 14px;border-radius:16px;border-color:transparent;background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground);font-size:13px}
+.dshsm-btn--primary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}
+.dshsm-btn--primary:disabled{background:var(--dsw-alias-button-primary-dimmed);color:var(--dsw-alias-label-quaternary)}
+.dshsm-btn--danger{color:var(--dsw-alias-state-error-primary)}
+.dshsm-btn--danger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger)}
+
+.dshsm-editor,.dshsm-form{display:flex;flex-direction:column;gap:12px;min-width:0}
+.dshsm-editor__head{margin:0;font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:11px;line-height:16px;color:var(--dsw-alias-label-quaternary);overflow-wrap:anywhere}
+.dshsm-textarea{box-sizing:border-box;width:100%;min-height:300px;resize:vertical;padding:10px 12px;border:.5px solid var(--dsw-alias-border-l3);border-radius:12px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:12px;line-height:18px}
+.dshsm-textarea:focus{outline:none;border-color:var(--dsw-alias-state-business-primary)}
+.dshsm-textarea--short{min-height:140px}
+
+.dshsm-field{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}
+/* 表单里占满整行的字段（正文），其余字段并排。 */
+.dshsm-field--wide{width:100%;flex:1 1 100%}
+.dshsm-field input{box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
+.dshsm-field input:focus{outline:none;border-color:var(--dsw-alias-state-business-primary)}
+.dshsm-check{display:flex;align-items:center;gap:6px;font-size:12px;line-height:18px}
+.dshsm-hint{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-quaternary)}
+.dshsm-foot{margin:0;font-size:11px;line-height:16px;color:var(--dsw-alias-label-quaternary)}
+.dshsm-shadowed{margin-top:8px}
+.dshsm-shadowed summary{cursor:pointer;font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary);margin-bottom:6px}
 `
 
     return { name, inject, apply }

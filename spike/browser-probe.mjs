@@ -37,6 +37,7 @@ const keepOpen = args.includes('--keep-open')
 const toggleTarget = value('toggle', '')
 const exercise = args.includes('--exercise')
 const doImportExercise = args.includes('--exercise-import')
+const doStyleAudit = args.includes('--styles')
 // 默认指向真实的用户技能根 —— 演练会在这里建一条临时技能，最后再清掉。
 const skillsDir = value('skills-dir', join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh', 'skills'))
 const DEBUG_PORT = Number(value('port', '9333'))
@@ -285,6 +286,138 @@ async function exerciseImport(cdp, { skillsDir, scratchDir, notes: remarks }) {
  */
 function doc(name, description) {
   return ['---', `name: ${name}`, `description: ${description}`, '---', '', '正文由浏览器探针导入。', ''].join(String.fromCharCode(10))
+}
+
+/**
+ * 把"样式对齐"变成可判定的东西。
+ *
+ * 同一个浏览器、同一个主题下，读我们和 `@lolkda/dsh-prompt-manager` **对应元素**的计算样式，
+ * 逐项比对。令牌名写错、单位写错、规则没生效，计算值都会露出来 —— 光看截图是看不出来的。
+ * 参考值取自提示词页自己渲染出来的那棵树，不是照抄源码里记的数字。
+ * @param {object} cdp - 连接
+ * @param {{notes: string[]}} ctx - 记录
+ * @returns {Promise<void>} 完成
+ */
+async function auditStyles(cdp, { notes: remarks }) {
+  const PROPS = {
+    card: ['paddingTop', 'paddingRight', 'borderTopWidth', 'borderTopStyle', 'borderTopLeftRadius'],
+    title: ['fontSize', 'fontWeight', 'lineHeight'],
+    meta: ['fontSize', 'lineHeight', 'color'],
+    tab: ['fontSize', 'lineHeight', 'paddingTop', 'paddingBottom', 'color'],
+    badge: ['paddingTop', 'paddingLeft', 'borderTopWidth', 'borderTopLeftRadius', 'fontSize', 'lineHeight'],
+    button: ['height', 'paddingLeft', 'borderTopWidth', 'borderTopLeftRadius', 'fontSize'],
+  }
+  // 每一格给一串候选选择器：提示词页在不同视图下渲染的控件不一样，写死一个会假失败。
+  const PAIRS = [
+    ['行卡', 'card', ['.dshsm-row'], ['.dsh-prompt-manager__card']],
+    ['标题', 'title', ['.dshsm-name'], ['.dsh-prompt-manager__title']],
+    ['次要说明', 'meta', ['.dshsm-row__desc'], ['.dsh-prompt-manager__meta']],
+    ['标签页', 'tab', ['.dshsm-tab'], ['.dsh-prompt-manager__tab']],
+    ['徽标', 'badge', ['.dshsm-pill'], ['.dsh-prompt-manager__badge', '.dsh-prompt-manager__dot']],
+  ]
+
+  // 按钮单独处理：提示词页的**列表视图里不渲染普通按钮**（只有图标按钮、以及输入框下方的 chip），
+  // 就地取不到参考值。所以这里对照的是它样式表里写死的几何，来源标注清楚。
+  // 它挡不住"我当初抄错了" —— 但挡得住"以后谁改坏了"。
+  const BUTTONS = [
+    ['次要按钮', '.dshsm-btn:not(.dshsm-btn--primary)', { height: '28px', paddingLeft: '10px', borderTopLeftRadius: '14px', fontSize: '12px' }],
+    ['主按钮', '.dshsm-btn--primary', { height: '32px', borderTopLeftRadius: '16px', fontSize: '13px' }],
+  ]
+
+  /**
+   * 切到设置里的某个条目。
+   * @param {string} label - 条目文字
+   * @returns {Promise<boolean>} 是否点到
+   */
+  const go = async (label) => {
+    const clicked = await cdp.evaluate(`(() => {
+      const nodes = Array.from(document.querySelectorAll('button, [role="button"], a, li, [class*="item"]'))
+      const target = nodes.find((el) => (el.innerText || '').trim() === ${JSON.stringify(label)})
+      if (!target) return false
+      target.click()
+      return true
+    })()`)
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    return clicked === true
+  }
+
+  /**
+   * 按当前可见的一侧读一遍计算样式。
+   * @param {number} side - 0 取我们的选择器，1 取提示词页的
+   * @returns {Promise<object>} 每个语义角色一组属性
+   */
+  const readAll = async (side) =>
+    cdp.evaluate(`(() => {
+      const spec = ${JSON.stringify(PAIRS.map(([, kind, ours, theirs]) => [kind, side === 0 ? ours : theirs]))}
+      const props = ${JSON.stringify(PROPS)}
+      const out = {}
+      for (const [kind, selectors] of spec) {
+        let el = null
+        for (const selector of selectors) {
+          el = document.querySelector(selector)
+          if (el !== null) break
+        }
+        if (el === null) { out[kind] = null; continue }
+        const cs = getComputedStyle(el)
+        out[kind] = Object.fromEntries(props[kind].map((p) => [p, cs[p]]))
+      }
+      return out
+    })()`)
+
+  const ours = await readAll(0)
+  const switched = await go('提示词')
+  check(switched, '切得到提示词页（用来取参考样式）')
+  const theirs = switched ? await readAll(1) : null
+  // 提示词页当前视图里都有哪些类，留在备注里 —— 下次对照选择器要换就照这个换。
+  const available = switched
+    ? await cdp.evaluate(
+        `Array.from(new Set(Array.from(document.querySelectorAll('[class*="dsh-prompt-manager__"]')).flatMap((el) => Array.from(el.classList).filter((c) => c.startsWith('dsh-prompt-manager__'))))).sort()`,
+      )
+    : []
+  await go('技能')
+
+  if (!theirs) {
+    remarks.push('没取到提示词页的样式，样式对比没做成')
+    return
+  }
+  if (available.length > 0) remarks.push(`提示词页可对照的类：${available.join('、')}`)
+
+  for (const [label, kind] of PAIRS) {
+    const mine = ours[kind]
+    const ref = theirs[kind]
+    // 对照侧缺席是**取不到参考**，不是"样式不一致" —— 记进备注，不算失败。
+    if (!mine || !ref) {
+      remarks.push(`${label}：没取到对照样式（我们 ${mine ? 'ok' : '缺'} / 提示词页 ${ref ? 'ok' : '缺'}），本项跳过`)
+      continue
+    }
+    for (const prop of PROPS[kind]) {
+      const ok = mine[prop] === ref[prop]
+      check(ok, `${label}.${prop} 与提示词页一致`, ok ? mine[prop] : `我们 ${mine[prop]} ≠ 提示词页 ${ref[prop]}`)
+    }
+  }
+
+  const buttons = await cdp.evaluate(`(() => {
+    const spec = ${JSON.stringify(BUTTONS.map(([, selector, expected]) => [selector, expected]))}
+    const out = []
+    for (const [selector, expected] of spec) {
+      const el = document.querySelector(selector)
+      if (el === null) { out.push([selector, null]); continue }
+      const cs = getComputedStyle(el)
+      out.push([selector, Object.fromEntries(Object.keys(expected).map((p) => [p, cs[p]]))])
+    }
+    return out
+  })()`)
+  for (const [index, [selector, actual]] of buttons.entries()) {
+    const [label, , expected] = BUTTONS[index]
+    if (!actual) {
+      remarks.push(`${label}（${selector}）没找到，跳过`)
+      continue
+    }
+    for (const [prop, want] of Object.entries(expected)) {
+      const ok = actual[prop] === want
+      check(ok, `${label}.${prop} 符合提示词页的几何`, ok ? actual[prop] : `我们 ${actual[prop]} ≠ 期望 ${want}`)
+    }
+  }
 }
 
 /**
@@ -683,6 +816,11 @@ try {
   if (doImportExercise) {
     console.log('\n在真实 DOM 里走一遍 导入（ZIP 上传 / Markdown 上传 / 按路径）')
     await exerciseImport(cdp, { skillsDir, scratchDir: profileDir, notes })
+  }
+
+  if (doStyleAudit) {
+    console.log('\n和提示词页逐项对比计算样式（同一次会话、同一个主题）')
+    await auditStyles(cdp, { notes })
   }
 
   console.log('\n看看有没有 JS 报错')

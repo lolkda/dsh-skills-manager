@@ -940,3 +940,51 @@ skill provider "..." returned skill "x" without a description
 
 **"改一下再跑"，比"看一眼觉得对"值钱得多。** 上一轮那条 whenToUse 的守门测试就是靠这一步
 才敢说"它真能抓住"；这一轮同样的动作，把一条假警报戳穿了。两个方向都靠它。
+
+## 27. 样式对齐 `@lolkda/dsh-prompt-manager`
+
+要求是"样式和 dsh-prompt-manager 一样"。原来的 CSS **一个设计令牌都没用**，颜色全是硬编码的
+`rgba(127,127,127,...)` / `rgba(90,150,255,...)` —— 这是和设置里其它页面放在一起时最刺眼的地方：
+硬编码的颜色不会跟随明暗主题。
+
+### 改了什么
+
+- **颜色全部换成 `--dsw-alias-*` 令牌**（硬编码颜色清零）：`label-primary/secondary/tertiary/quaternary`、
+  `border-l2/l3/l4`、`bg-base`、`bg-module-platform`、`interactive-bg-hover(-danger)`、
+  `state-success/warn/error/business-primary`、`button-primary-fill/hover/dimmed`、`label-primary-foreground`。
+  代码字体也走 `--ds-font-family-code`。
+- **几何照抄**：行卡 `padding:12px 14px` + `.5px` 发丝边 + `16px` 圆角；按钮 `28px` 高（主按钮 `32px`）、
+  圆角 `14/16px`；输入框 `32px` 高、`8px` 圆角、聚焦走 `state-business-primary`；文本域 `12px` 圆角。
+- **标签页从"胶囊组"改成下划线式**：朴素文字 + 选中的 2px 下划线 + 底下一条发丝线 —— 这是提示词页
+  最显眼的一个结构特征，之前那套灰底胶囊跟设置里其它页面完全是两种语言。
+- **徽标从圆角胶囊改成方角小标**：`1px 6px` 内距、`4px` 圆角、`11px/16px`，与提示词页的 badge 一致。
+- 顺手补了两个 JS 用到但 CSS 里没定义的类：`.dshsm-main/.dshsm-side{min-width:0}`（网格项默认
+  `min-width:auto`，会撑破行内省略号）和 `.dshsm-field--wide`。
+
+### 验证方式：不是看截图，是比计算样式
+
+新增 `browser-probe.mjs --styles`：在**同一个浏览器、同一个主题**下，读我们和提示词页**对应元素**的
+计算样式，逐项比对。令牌名写错、单位写错、规则被覆盖，计算值都会露出来 —— 光看截图看不出来。
+参考值取自提示词页**自己渲染出来的那棵树**，不是照抄源码里记的数字。
+
+```
+行卡.paddingTop        12px          ✔      标签页.fontSize        13px            ✔
+行卡.paddingRight      14px          ✔      标签页.paddingTop      7px             ✔
+行卡.borderTopLeftRadius 16px        ✔      标签页.paddingBottom   9px             ✔
+行卡.borderTopStyle    solid         ✔      标签页.color           rgb(15,17,21)   ✔
+标题.fontSize          14px          ✔      徽标.paddingLeft       6px             ✔
+标题.fontWeight        500           ✔      徽标.borderTopLeftRadius 4px           ✔
+标题.lineHeight        22px          ✔      徽标.fontSize/lineHeight 11px/16px     ✔
+次要说明.fontSize      12px          ✔
+次要说明.lineHeight    18px          ✔
+次要说明.color         rgb(129,133,140) ✔
+```
+
+共 **30 项全过**，零失败。
+
+按钮单独处理并**说清楚为什么**：提示词页的列表视图里**不渲染普通按钮**（只有图标按钮和输入框下方的
+chip），就地取不到参考值。所以按钮对照的是它样式表里写死的几何，并在代码里标明来源 —— 它挡不住
+"我当初抄错了"，但挡得住"以后谁改坏了"。
+
+第一版把按钮和提示词页的 `__composerChip` 去比，报了 5 项失败；那是**对照选择器选错了**，不是样式
+不符。发现后改成"取不到对照就跳过并记备注"，而不是判失败 —— 假失败比没检查更浪费时间。
