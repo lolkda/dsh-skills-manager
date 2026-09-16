@@ -15,6 +15,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
+import { assertSupportedJsonSchema, jsonSchemaToTs } from '@deepseek-ai/dsh-tools'
+
 import { createRuntime, RUNTIME_KEY } from '../lib/index.js'
 import { overrideFor } from '../lib/store.js'
 import { installTools } from '../lib/tools.js'
@@ -181,6 +183,24 @@ test('skills_update 拒绝会写坏的文档，且不碰磁盘', async () => {
   }
 })
 
+test('每个工具的参数 schema 都落在 DSH 支持的子集里', () => {
+  const env = setup()
+  try {
+    for (const definition of env.registered) {
+      // 用 **DSH 自己的校验器**，而不是我照着源码重写一遍规则：规则会随 DSH 变，重写的那份不会。
+      // 这就是 `type: ['boolean','null']` 当初溜进来的地方 —— `ctx.tools.register` 只校验
+      // `output.schema`，**完全不看 parameters**，所以注册期一路绿灯。
+      assertSupportedJsonSchema(definition.parameters)
+      // 而且参数表要能渲染成真实类型。DSH 有一整套按 schema 渲染 TS/Python 签名的路径
+      // （PTC 模式），类型数组会让整份参数渲染成 `unknown` —— 模型看到的参数表形同没有。
+      const rendered = jsonSchemaToTs(definition.parameters)
+      assert.equal(rendered.includes('unknown'), false, `${definition.name} 的参数渲染出了 unknown：${rendered}`)
+    }
+  } finally {
+    env.cleanup()
+  }
+})
+
 test('skills_set_enabled 真的改了策略，而且没有动源文件', async () => {
   const env = setup()
   try {
@@ -197,10 +217,17 @@ test('skills_set_enabled 真的改了策略，而且没有动源文件', async (
     assert.equal(on.value.ok, true)
     assert.equal(overrideFor(env.runtime.state, 'dsh', 'tool-toggle'), true)
 
-    const cleared = await env.call('skills_set_enabled', { name: 'tool-toggle', enabled: null })
+    // 三种状态：false 停用、true 启用、**省略**清除覆盖。
+    const cleared = await env.call('skills_set_enabled', { name: 'tool-toggle' })
     assert.equal(cleared.value.ok, true)
     assert.equal(overrideFor(env.runtime.state, 'dsh', 'tool-toggle'), undefined, '清除后不该留下一条 null')
     assert.equal(env.read('tool-toggle'), before)
+
+    // 从"已停用"直接省略也要能清除，而不是被当成 falsy 去停用。
+    await env.call('skills_set_enabled', { name: 'tool-toggle', enabled: false })
+    assert.equal(overrideFor(env.runtime.state, 'dsh', 'tool-toggle'), false)
+    await env.call('skills_set_enabled', { name: 'tool-toggle' })
+    assert.equal(overrideFor(env.runtime.state, 'dsh', 'tool-toggle'), undefined, '省略要从任何状态回到"跟随文件"')
   } finally {
     env.cleanup()
   }

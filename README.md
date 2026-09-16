@@ -117,6 +117,21 @@ curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 agent session-... 的技能视图：共 9 条 —— apple-liquid-glass、grill-me（模型不可用）、...；与 DSH 实际解析一致（9 条）
 ```
 
+### Agent 工具的参数表只用 DSH 支持的 JSON Schema 子集
+
+`ctx.tools.register` 会校验 `output.schema`，但**完全不校验 `parameters`** —— 参数表写错在注册期
+一路绿灯，问题要到模型那边才显形。所以 `test/tools.test.mjs` 里直接用 **DSH 自己的**
+`assertSupportedJsonSchema` 把七个工具的参数表逐个过一遍（用它的校验器，而不是照着源码重写一遍
+规则：规则会随 DSH 变，重写的那份不会）。
+
+DSH 支持的子集里 `type` **只能是单个字符串**：`type: ['boolean','null']` 会被直接拒掉，而且
+`jsonSchemaToTs` 会把整份参数渲染成 `unknown` —— 在按 schema 渲染签名的模式下，模型看到的参数表
+形同没有。因此 `skills_set_enabled` 的三种状态里，「清除覆盖」由**省略 `enabled`** 表达，而不是
+传 `null`。
+
+（内部 API 不受这个限制：`runtime.setEnabled({ enabled: boolean | null })` 与界面用的
+`/policy` 路由仍然用 `null` 表示清除。）
+
 ### Agent 工具只写用户根
 
 暴露给 Agent 的七个 `skills_*` 工具**不接受 `rootKey`**：新建与导入一律落在用户根

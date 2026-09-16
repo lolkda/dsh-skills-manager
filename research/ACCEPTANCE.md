@@ -812,3 +812,47 @@ el.dispatchEvent(new Event('input', { bubbles: true }))
 
 至此五项能力在**真实浏览器**里都有实测证据：列表、启停（并把结果对到模型实际收到的系统提示词）、
 正文查看与编辑、新建与导入（ZIP / 文件夹 / 单个 SKILL.md）、删除+回收站+恢复。
+
+## 24. 一个只有真去查才会发现的 schema 缺陷
+
+起因是想确认"模型到底能不能调这些工具"。查 DSH 怎么校验工具参数时发现：`ctx.tools.register`
+**只校验 `output.schema`，完全不看 `parameters`** —— 参数表写错，注册期一路绿灯。
+
+接着看 DSH 支持的 JSON Schema 子集，发现一条硬规则：
+
+```
+.type must be a single type string (type arrays are not supported)
+```
+
+而 `skills_set_enabled` 用的正是 `type: ['boolean', 'null']`（三种状态：启用 / 停用 / 清除，
+"清除"用 `null` 表达）。**它是整个工具生态里唯一一处联合类型** —— DSH 自己的工具里
+`type: [...]` 和 `nullable` 都是零处。用 DSH 自己的校验器实测：
+
+```
+DSH 校验器拒绝: unsupported JSON schema: schema.properties.enabled.type
+                must be a single type string (type arrays are not supported)
+渲染成 TS 类型: "unknown"
+```
+
+也就是说：这个工具的 schema 通不过 DSH 的校验，而且 `jsonSchemaToTs` 会把**整份参数**渲染成
+`unknown` —— 在按 schema 渲染签名的模式下，模型看到的参数表形同没有。参数是被原样透传给 provider
+的（`schemaOf()` 只做一次 JSON 快照），所以今天大多数 provider 可能照单全收，**失败与否取决于
+provider，而且是静默的**。
+
+### 修法：把"清除"从 `null` 改成**省略**
+
+`enabled` 变成单个 `boolean`，`required` 只剩 `name`：传 `true`/`false` 是设定，**省略**就是清除。
+三种状态一个不少，全部落在子集内。
+
+这是对工具接口的破坏性改动，但包还没发布，没有外部调用方 —— 与其留一个"看 provider 脸色"的参数
+类型，不如现在就改对。内部 API 不受影响：`runtime.setEnabled({ enabled: boolean | null })` 和
+界面用的 `/policy` 路由仍然用 `null` 表示清除。
+
+### 回归测试用 DSH 自己的校验器
+
+```
+assertSupportedJsonSchema(definition.parameters)              // 落在子集里
+jsonSchemaToTs(definition.parameters) 里不能出现 "unknown"     // 能渲染出真实类型
+```
+
+不照着源码重写一遍规则：规则会随 DSH 变，重写的那份不会。
