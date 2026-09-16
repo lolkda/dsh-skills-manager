@@ -22,6 +22,7 @@
     "spike": "node spike/registry-probe.mjs",
     "probe:session": "node spike/session-probe.mjs",
     "probe:lifecycle": "node spike/lifecycle-probe.mjs",
+    "probe:project": "node spike/project-root-probe.mjs",
     "check": "node --check client/client.js && node --test"
   },
   "dsh": {
