@@ -3,7 +3,7 @@
  *
  * 为什么需要它：两边的测试此前各测各的 —— 客户端测的是"渲染对不对"，服务端测的是"接口对不对"，
  * 中间靠**字段名**连着，而那个契约**从来没人验过**。客户端表单此前连一次都没被驱动过（只有渲染），
- * 服务端的 `/skill/import`、`/skill/content`、`/trash/purge` 也没有任何 HTTP 层测试。
+ * 服务端的 `/skill/import`、`/skill/content`、`/skill/delete` 也没有任何 HTTP 层测试。
  *
  * 这里把客户端发出的真实请求**直接喂给真实路由**，然后到磁盘上看结果 —— 字段名写错、路径写错、
  * 少传一个参数，都会在这里现形。
@@ -49,7 +49,7 @@ const labelOf = (node) => (Array.isArray(node.children) ? node.children.map(text
 /**
  * 按按钮文案前缀找节点。
  *
- * 有些按钮的文案带计数（「回收站 1」），精确相等匹配不上 —— 而且匹配不上时用 `?.` 会静默
+ * 按钮文案可能有装饰性前缀（「＋ 新建技能」），精确相等匹配不上 —— 而且匹配不上时用 `?.` 会静默
  * 什么都不做，测试就变成了空转。
  * @param {object} tree - 渲染树
  * @param {string} prefix - 文案前缀
@@ -254,7 +254,7 @@ test('界面查看与保存正文：改动落盘，界面里也读得到', async
   }
 })
 
-test('界面删除进回收站，再从回收站恢复', async () => {
+test('界面删除技能：先确认，再永久删除', async () => {
   const env = await boot()
   try {
     const { fetch, calls } = bridge(env)
@@ -265,32 +265,27 @@ test('界面删除进回收站，再从回收站恢复', async () => {
     assert.equal(existsSync(doomed), true, '前提：plain 这条技能存在')
 
     tree = await selectSkill(client, tree, 'plain')
-    const trash = buttonByText(tree, '移到回收站')
-    assert.ok(trash, '详情里应当有移到回收站的入口')
-    trash.props.onClick()
+    const remove = buttonByText(tree, '删除')
+    assert.ok(remove, '详情里应当有删除入口')
+
+    // 没有回收站了，删就是真删 —— 所以第一下**不能**直接删。
+    remove.props.onClick()
+    tree = await client.update()
+    assert.equal(existsSync(doomed), true, '第一次点击只该进入确认态，文件必须还在')
+    assert.equal(calls.some((call) => call.url.includes('/skill/delete')), false, '确认之前不该发出删除请求')
+    assert.match(textOf(tree), /不可撤销/, '要把"不可撤销"这话说出来')
+
+    const confirm = buttonByText(tree, '确认删除')
+    assert.ok(confirm, '确认态里应当有「确认删除」')
+    confirm.props.onClick()
     await client.update()
     tree = await client.update()
 
-    const trashCall = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/trash'))
-    assert.ok(trashCall, '应当发出删除请求')
-    assert.deepEqual(Object.keys(trashCall.body).sort(), ['name', 'rootKey'])
-    assert.equal(existsSync(doomed), false, '源文件应当被移走')
-
-    // 切到回收站，恢复它。
-    const trashTab = buttonStartingWith(tree, '回收站')
-    assert.ok(trashTab, '找得到回收站标签')
-    trashTab.props.onClick()
-    await client.update()
-    tree = await client.update()
-    const restore = buttonByText(tree, '恢复')
-    assert.ok(restore, '回收站里应当有恢复按钮')
-    restore.props.onClick()
-    await client.update()
-
-    const restoreCall = calls.find((call) => call.url.startsWith('/dsh-skills-manager/trash/restore'))
-    assert.ok(restoreCall, '应当发出恢复请求')
-    assert.deepEqual(Object.keys(restoreCall.body).sort(), ['id'])
-    assert.equal(existsSync(doomed), true, '恢复之后文件应当回到原位')
+    const deleteCall = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/delete'))
+    assert.ok(deleteCall, '应当发出删除请求')
+    assert.deepEqual(Object.keys(deleteCall.body).sort(), ['name', 'rootKey'])
+    assert.equal(existsSync(doomed), false, '确认之后文件必须真的没了')
+    assert.equal(existsSync(join(env.home, 'skills', 'plain')), false, 'bundle 的整个目录都要没了')
   } finally {
     env.cleanup()
   }

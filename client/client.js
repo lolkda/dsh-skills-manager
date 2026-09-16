@@ -154,6 +154,10 @@ window.__ModuleLoader__.load({
     /** 技能详情面板。 */
     function Detail(props) {
       const skill = props.skill
+      // 没有回收站了，删除就是永久删除 —— 点一下直接删掉别人的文件是不可接受的，
+      // 所以必须先确认。就地二段式，不用 window.confirm：那个会阻塞宿主线程，
+      // 也没法在渲染测试里断言。
+      const [confirming, setConfirming] = useState(false)
       const overridden = skill.override === true || skill.override === false
       return h(
         'div',
@@ -207,15 +211,23 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dshsm-actions' },
-          h('button', { type: 'button', className: 'dshsm-btn', onClick: props.onEdit, disabled: !skill.mutable }, '编辑正文'),
+          h('button', { type: 'button', className: 'dshsm-btn', onClick: props.onEdit, disabled: !skill.mutable }, '✎ 编辑正文'),
           overridden
-            ? h('button', { type: 'button', className: 'dshsm-btn', onClick: () => props.onToggle(skill, null) }, '恢复文件设定')
+            ? h('button', { type: 'button', className: 'dshsm-btn', onClick: () => props.onToggle(skill, null) }, '↺ 恢复文件设定')
             : null,
-          h(
-            'button',
-            { type: 'button', className: 'dshsm-btn dshsm-btn--danger', onClick: props.onTrash, disabled: !skill.mutable },
-            '移到回收站',
-          ),
+          confirming
+            ? h(
+                'span',
+                { className: 'dshsm-confirm' },
+                h('span', { className: 'dshsm-confirm__text' }, `永久删除 ${skill.name}？不可撤销。`),
+                h('button', { type: 'button', className: 'dshsm-btn dshsm-btn--danger', onClick: props.onDelete }, '确认删除'),
+                h('button', { type: 'button', className: 'dshsm-btn', onClick: () => setConfirming(false) }, '取消'),
+              )
+            : h(
+                'button',
+                { type: 'button', className: 'dshsm-btn dshsm-btn--danger', onClick: () => setConfirming(true), disabled: !skill.mutable },
+                '✕ 删除',
+              ),
         ),
       )
     }
@@ -376,47 +388,6 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 回收站。 */
-    function TrashPanel(props) {
-      const [busy, setBusy] = useState(null)
-      /**
-       * 恢复或永久删除。
-       * @param {object} item - 回收站条目
-       * @param {string} action - restore 或 purge
-       * @returns {Promise<void>} 完成
-       */
-      const act = async (item, action) => {
-        setBusy(item.id)
-        const response = await request(`/trash/${action}`, { id: item.id }).catch(() => ({ ok: false }))
-        setBusy(null)
-        if (response.ok) props.onChanged()
-        else props.onError(response.error ?? '操作失败')
-      }
-      if (props.items.length === 0) return h('p', { className: 'dshsm-hint' }, '回收站是空的。删除技能只会移到这里，随时可以恢复。')
-      return h(
-        'div',
-        { className: 'dshsm-list-wrap' },
-        props.items.map((item) =>
-          h(
-            'div',
-            { className: 'dshsm-row', key: item.id },
-            h(
-              'div',
-              { className: 'dshsm-row__main' },
-              h('div', { className: 'dshsm-row__title' }, h('code', { className: 'dshsm-name' }, item.name), h(Pill, { tone: 'muted' }, item.source)),
-              h('div', { className: 'dshsm-row__meta' }, `${item.originalPath} · ${String(item.deletedAt).replace('T', ' ').slice(0, 19)}`),
-            ),
-            h(
-              'div',
-              { className: 'dshsm-row__action' },
-              h('button', { type: 'button', className: 'dshsm-btn', disabled: busy === item.id, onClick: () => act(item, 'restore') }, '恢复'),
-              h('button', { type: 'button', className: 'dshsm-btn dshsm-btn--danger', disabled: busy === item.id, onClick: () => act(item, 'purge') }, '永久删除'),
-            ),
-          ),
-        ),
-      )
-    }
-
     /** 主分区。 */
     /**
      * 把注册表核对结果渲染成一条提示。
@@ -442,9 +413,7 @@ window.__ModuleLoader__.load({
     function SkillsSection() {
       const [data, setData] = useState(null)
       const [error, setError] = useState(null)
-      const [tab, setTab] = useState('skills')
       const [filter, setFilter] = useState('all')
-      const [query, setQuery] = useState('')
       const [selected, setSelected] = useState(null)
       const [mode, setMode] = useState(null)
       const [editor, setEditor] = useState(null)
@@ -529,13 +498,9 @@ window.__ModuleLoader__.load({
       const roots = data ? data.roots : []
       const skills = useMemo(() => {
         if (!data) return []
-        const needle = query.trim().toLowerCase()
-        return data.skills.filter((skill) => {
-          if (filter !== 'all' && skill.rootKey !== filter) return false
-          if (!needle) return true
-          return skill.name.toLowerCase().includes(needle) || String(skill.description).toLowerCase().includes(needle)
-        })
-      }, [data, filter, query])
+        if (filter === 'all') return data.skills
+        return data.skills.filter((skill) => skill.rootKey === filter)
+      }, [data, filter])
 
       const selectedSkill = data && selected ? data.skills.find((skill) => skill.docPath === selected) : null
       const siblings = data && selectedSkill ? data.skills.filter((skill) => skill.name === selectedSkill.name) : []
@@ -547,19 +512,7 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { className: 'dshsm-section' },
-        h(
-          'div',
-          { className: 'dshsm-bar' },
-          h(
-            'div',
-            { className: 'dshsm-tabs' },
-            h('button', { type: 'button', className: `dshsm-tab${tab === 'skills' ? ' dshsm-tab--active' : ''}`, onClick: () => setTab('skills') }, `技能 ${data ? data.skills.filter((s) => s.winner).length : ''}`),
-            h('button', { type: 'button', className: `dshsm-tab${tab === 'trash' ? ' dshsm-tab--active' : ''}`, onClick: () => setTab('trash') }, `回收站 ${data && data.trash.length > 0 ? data.trash.length : ''}`),
-          ),
-          tab === 'skills'
-            ? h('input', { className: 'dshsm-search', placeholder: '搜索名字或描述', value: query, onChange: (event) => setQuery(event.target.value) })
-            : null,
-        ),
+
         h(
           'div',
           { className: 'dshsm-scope' },
@@ -576,8 +529,7 @@ window.__ModuleLoader__.load({
         error ? h('div', { className: 'dshsm-notice dshsm-notice--danger' }, error) : null,
         data && data.damaged ? h('div', { className: 'dshsm-notice dshsm-notice--warn' }, data.damaged) : null,
         divergenceNotice(registry ? registry.divergence : null),
-        tab === 'trash' ? h(TrashPanel, { items: data ? data.trash : [], onChanged: reload, onError: setError }) : null,
-        tab === 'skills' && mode === 'create'
+        mode === 'create'
           ? h(CreateForm, {
               rootKey: writeRoot ? writeRoot.key : '',
               rootPath: writeRoot ? writeRoot.path : '（没有可写的技能根目录）',
@@ -588,7 +540,7 @@ window.__ModuleLoader__.load({
               onCancel: () => setMode(null),
             })
           : null,
-        tab === 'skills' && mode === 'import'
+        mode === 'import'
           ? h(ImportForm, {
               rootKey: writeRoot ? writeRoot.key : '',
               onDone: async () => {
@@ -598,7 +550,7 @@ window.__ModuleLoader__.load({
               onCancel: () => setMode(null),
             })
           : null,
-        tab === 'skills' && editor
+        editor
           ? h(Editor, {
               name: editor.skill.name,
               rootKey: editor.skill.rootKey,
@@ -611,7 +563,7 @@ window.__ModuleLoader__.load({
               onCancel: () => setEditor(null),
             })
           : null,
-        tab === 'skills' && !editor && !mode
+        !editor && !mode
           ? h(
               'div',
               { className: 'dshsm-block' },
@@ -660,8 +612,9 @@ window.__ModuleLoader__.load({
                                 siblings,
                                 onEdit: () => openEditor(skill),
                                 onToggle: toggle,
-                                onTrash: async () => {
-                                  const response = await request('/skill/trash', { rootKey: skill.rootKey, name: skill.name })
+                                onDelete: async () => {
+                                  // 没有回收站了，这一下就是永久删除 —— 所以必须问一句。
+                                  const response = await request('/skill/delete', { rootKey: skill.rootKey, name: skill.name })
                                   if (!response.ok) setError(response.error ?? '删除失败')
                                   setSelected(null)
                                   await reload()
@@ -704,7 +657,7 @@ window.__ModuleLoader__.load({
               ),
             )
           : null,
-        tab === 'skills' && (editor || mode)
+        editor || mode
           ? h('p', { className: 'dshsm-foot' }, '编辑与新建只影响这一个技能；取消不会写入任何内容。')
           : null,
       )
@@ -801,10 +754,6 @@ window.__ModuleLoader__.load({
 .dshsm-tab--active{color:var(--dsw-alias-label-primary)}
 .dshsm-tab--active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px 2px 0 0;background:var(--dsw-alias-label-primary)}
 
-.dshsm-search{box-sizing:border-box;flex:0 1 240px;height:32px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
-.dshsm-search:focus{outline:none;border-color:var(--dsw-alias-state-business-primary)}
-.dshsm-search::placeholder{color:var(--dsw-alias-label-quaternary)}
-
 .dshsm-block{display:flex;flex-direction:column;gap:12px;min-width:0}
 .dshsm-roots{display:flex;flex-wrap:wrap;gap:6px}
 
@@ -841,7 +790,8 @@ window.__ModuleLoader__.load({
 
 /* 开关：提示词页没有这个控件，用同一套令牌自造一个 */
 .dshsm-switch{position:relative;flex:0 0 auto;width:36px;height:20px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-border-l3);cursor:pointer}
-.dshsm-switch--on{background:var(--dsw-alias-state-success-primary)}
+/* 打开态用主文字色，和提示词页的开关一致（深色药丸 + 反色圆钮）；绿色留给状态圆点。 */
+.dshsm-switch--on{background:var(--dsw-alias-label-primary)}
 .dshsm-switch:disabled{opacity:.5;cursor:default}
 .dshsm-switch__knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-bg-base);transition:left .15s ease}
 .dshsm-switch--on .dshsm-switch__knob{left:18px}
@@ -860,6 +810,8 @@ window.__ModuleLoader__.load({
 .dshsm-notice--danger{color:var(--dsw-alias-state-error-primary)}
 .dshsm-list{margin:0;padding-left:18px}
 .dshsm-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dshsm-confirm{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dshsm-confirm__text{font-size:12px;line-height:18px;color:var(--dsw-alias-state-error-primary)}
 
 /* 按钮：三种形态，与提示词页一致 */
 .dshsm-btn{box-sizing:border-box;height:28px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:14px;background:0 0;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1;white-space:nowrap;cursor:pointer}

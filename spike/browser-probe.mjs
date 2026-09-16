@@ -180,13 +180,7 @@ async function exerciseImport(cdp, { skillsDir, scratchDir, notes: remarks }) {
   mkdirSync(dirPath, { recursive: true })
   writeFileSync(join(dirPath, 'SKILL.md'), doc(dirName, '由浏览器按路径导入'))
 
-  // 上一个演练结束时面板停在回收站标签页，而添加入口只在技能页渲染 —— 先切回去。
-  await cdp.evaluate(`(() => {
-    const el = Array.from(document.querySelectorAll('.dshsm-tab')).find((b) => (b.innerText || '').trim().startsWith('技能'))
-    if (el) el.click()
-    return true
-  })()`)
-  await new Promise((resolve) => setTimeout(resolve, 700))
+    await new Promise((resolve) => setTimeout(resolve, 700))
 
   /** 打开导入表单。 */
   const openImport = () =>
@@ -316,14 +310,20 @@ async function auditStyles(cdp, { notes: remarks }) {
     tab: ['fontSize', 'lineHeight', 'paddingTop', 'paddingBottom', 'color'],
     badge: ['paddingTop', 'paddingLeft', 'borderTopWidth', 'borderTopLeftRadius', 'fontSize', 'lineHeight'],
     button: ['height', 'paddingLeft', 'borderTopWidth', 'borderTopLeftRadius', 'fontSize'],
+    // 圆角与 padding 不参与对比：`999px` 与 `10px` 在 20px 高下都是全圆，
+    // 绝对定位的圆钮与 padding 内缩也是同一效果的两种写法。
+    control: ['width', 'height', 'backgroundColor', 'borderTopWidth'],
   }
   // 每一格给一串候选选择器：提示词页在不同视图下渲染的控件不一样，写死一个会假失败。
   const PAIRS = [
     ['行卡', 'card', ['.dshsm-row'], ['.dsh-prompt-manager__card']],
     ['标题', 'title', ['.dshsm-name'], ['.dsh-prompt-manager__title']],
     ['次要说明', 'meta', ['.dshsm-row__desc'], ['.dsh-prompt-manager__meta']],
-    ['标签页', 'tab', ['.dshsm-tab'], ['.dsh-prompt-manager__tab']],
     ['徽标', 'badge', ['.dshsm-pill'], ['.dsh-prompt-manager__badge', '.dsh-prompt-manager__dot']],
+    // 开关与图标按钮：提示词页的开关是**原生 checkbox**（样式由宿主给），
+    // 我的开关是 button[role=switch]。量它的实际尺寸来对齐。
+    ['开关', 'control', ['.dshsm-switch'], ['input[type=checkbox]', '[role=switch]', '[class*=switch]', '[class*=toggle]']],
+    ['图标按钮', 'control', ['.dshsm-btn'], ['.dsh-prompt-manager__iconButton']],
   ]
 
   // 按钮单独处理：提示词页的**列表视图里不渲染普通按钮**（只有图标按钮、以及输入框下方的 chip），
@@ -358,30 +358,24 @@ async function auditStyles(cdp, { notes: remarks }) {
    */
   const readAll = async (side) =>
     cdp.evaluate(`(() => {
-      const spec = ${JSON.stringify(PAIRS.map(([, kind, ours, theirs]) => [kind, side === 0 ? ours : theirs]))}
+      // 以**标签**为键：同一个 kind 可以有多对，用 kind 做键会互相覆盖。
+      const spec = ${JSON.stringify(PAIRS.map(([label, kind, ours, theirs]) => [label, kind, side === 0 ? ours : theirs]))}
       const props = ${JSON.stringify(PROPS)}
       const out = {}
-      for (const [kind, selectors] of spec) {
+      for (const [label, kind, selectors] of spec) {
         let el = null
         for (const selector of selectors) {
           el = document.querySelector(selector)
           if (el !== null) break
         }
-        if (el === null) { out[kind] = null; continue }
+        if (el === null) { out[label] = null; continue }
         const cs = getComputedStyle(el)
-        out[kind] = Object.fromEntries(props[kind].map((p) => [p, cs[p]]))
+        out[label] = Object.fromEntries(props[kind].map((p) => [p, cs[p]]))
       }
       return out
     })()`)
 
-  // 演练会把面板留在回收站标签页；先切回技能页，否则第一个标签不是选中态，
-  // 颜色对不上是取样位置的问题，不是样式不一致。
-  await cdp.evaluate(`(() => {
-    const el = Array.from(document.querySelectorAll('.dshsm-tab')).find((b) => (b.innerText || '').trim().startsWith('技能'))
-    if (el) el.click()
-    return true
-  })()`)
-  await new Promise((resolve) => setTimeout(resolve, 600))
+  await new Promise((resolve) => setTimeout(resolve, 400))
 
   const ours = await readAll(0)
   const switched = await go('提示词')
@@ -402,8 +396,8 @@ async function auditStyles(cdp, { notes: remarks }) {
   if (available.length > 0) remarks.push(`提示词页可对照的类：${available.join('、')}`)
 
   for (const [label, kind] of PAIRS) {
-    const mine = ours[kind]
-    const ref = theirs[kind]
+    const mine = ours[label]
+    const ref = theirs[label]
     // 对照侧缺席是**取不到参考**，不是"样式不一致" —— 记进备注，不算失败。
     if (!mine || !ref) {
       remarks.push(`${label}：没取到对照样式（我们 ${mine ? 'ok' : '缺'} / 提示词页 ${ref ? 'ok' : '缺'}），本项跳过`)
@@ -440,10 +434,10 @@ async function auditStyles(cdp, { notes: remarks }) {
 }
 
 /**
- * 在真实 DOM 里走一遍 新建 → 编辑 → 删除进回收站 → 恢复 → 永久删除。
+ * 在真实 DOM 里走一遍 新建 → 编辑 → 删除（永久删除，带二次确认）。
  *
- * 这是目标里另外三项能力（正文查看与编辑、新建、删除+回收站+恢复）在真实浏览器里的验收。
- * 会往真实的 `$DSH_HOME/skills` 写一条名字一眼可辨的临时技能，最后连回收站一起清干净 ——
+ * 这是目标里另外三项能力（正文查看与编辑、新建、删除）在真实浏览器里的验收。
+ * 会往真实的 `$DSH_HOME/skills` 写一条名字一眼可辨的临时技能，最后删干净 ——
  * 做完之后磁盘上不留任何痕迹。
  * @param {Cdp} cdp - 客户端
  * @param {object} options - 参数
@@ -510,24 +504,6 @@ async function exercisePanel(cdp, { skillsDir, notes: remarks }) {
       return true
     })()`)
 
-  /** 切到回收站标签。 */
-  const openTrashTab = () =>
-    cdp.evaluate(`(() => {
-      const tab = Array.from(document.querySelectorAll('.dshsm-tab')).find((el) => (el.innerText || '').trim().startsWith('回收站'))
-      if (!tab) return false
-      tab.click()
-      return true
-    })()`)
-
-  /** 切回「技能」标签。 */
-  const openSkillsTab = () =>
-    cdp.evaluate(`(() => {
-      const tab = Array.from(document.querySelectorAll('.dshsm-tab')).find((el) => (el.innerText || '').trim().startsWith('技能'))
-      if (!tab) return false
-      tab.click()
-      return true
-    })()`)
-
   // ---- 新建 ----
   check(await clickButton('新建技能'), '新建：打开表单')
   await new Promise((resolve) => setTimeout(resolve, 400))
@@ -561,38 +537,18 @@ async function exercisePanel(cdp, { skillsDir, notes: remarks }) {
   check(saved, '编辑：保存后编辑器关闭（说明服务端接受了）')
   check(existsSync(skillFile) && readFileSync(skillFile, 'utf8').includes(marker), '编辑：改动真的写进了磁盘')
 
-  // ---- 删除进回收站 ----
+  // ---- 删除：永久删除，先确认 ----
   check(await selectRow(), '删除：选中它')
   await new Promise((resolve) => setTimeout(resolve, 400))
-  check(await clickButton('移到回收站'), '删除：点移到回收站')
+  check(await clickButton('删除'), '删除：点删除')
+  const confirming = await waitFor(cdp, `!!(Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim().endsWith('确认删除')))`, 10000, '出现确认')
+  check(confirming, '删除：第一下只进确认态')
+  check(existsSync(skillFile), '删除：确认之前文件必须还在')
+  check(await clickButton('确认删除'), '删除：点确认删除')
   const gone = await waitFor(cdp, `!(${hasRow})`, 15000, '列表里不再有它')
   check(gone, '删除：列表里不再有它')
-  check(!existsSync(skillFile), '删除：源文件已经从技能目录移走')
-  check(await openTrashTab(), '删除：切到回收站标签')
-  const inTrash = await waitFor(cdp, hasRow, 10000, '回收站里出现了它')
-  check(inTrash, '删除：回收站里能找到它')
-
-  // ---- 恢复 ----
-  check(await clickButton('恢复'), '恢复：点恢复')
-  const backOnDisk = await waitFor(cdp, hasRow, 15000, '恢复后回收站里不再有它')
-  check(backOnDisk, '恢复：回收站里的条目消失了')
-  await new Promise((resolve) => setTimeout(resolve, 600))
-  check(existsSync(skillFile), '恢复：文件回到了技能目录')
-  check(readFileSync(skillFile, 'utf8').includes(marker), '恢复：内容一字不差')
-
-  // ---- 清场：删掉并永久删除 ----
-  // 恢复之后界面还停在回收站标签页，而那里已经没有它了 —— 必须切回「技能」再操作。
-  check(await openSkillsTab(), '清场：切回技能标签')
-  await new Promise((resolve) => setTimeout(resolve, 600))
-  check(await selectRow(), '清场：选中它')
-  await new Promise((resolve) => setTimeout(resolve, 400))
-  check(await clickButton('移到回收站'), '清场：再移进回收站')
-  check(await waitFor(cdp, `!(${hasRow})`, 15000, '再次移走'), '清场：列表里再次消失')
-  check(await openTrashTab(), '清场：切到回收站')
-  await new Promise((resolve) => setTimeout(resolve, 600))
-  check(await clickButton('永久删除'), '清场：点永久删除')
-  check(await waitFor(cdp, `!(${hasRow})`, 15000, '回收站里也没有了'), '清场：回收站里也没了')
-  check(!existsSync(join(skillsDir, name)), '清场：磁盘上不留痕迹')
+  check(!existsSync(skillFile), '删除：源文件已经从磁盘上没了')
+  check(!existsSync(join(skillsDir, name)), '删除：整个 bundle 目录都没了')
 }
 
 const chrome = CHROME_CANDIDATES.find((path) => path && existsSync(path))
@@ -761,7 +717,6 @@ try {
     const section = document.querySelector('.dshsm-section')
     return {
       hasSection: section !== null,
-      tabLabels: Array.from(document.querySelectorAll('.dshsm-tab')).map((el) => el.innerText.trim()),
       names: Array.from(document.querySelectorAll('.dshsm-name')).map((el) => el.innerText.trim()),
       rows: document.querySelectorAll('.dshsm-row').length,
       toggles: document.querySelectorAll('.dshsm-row input[type=checkbox], .dshsm-row [role=switch]').length,
@@ -773,7 +728,6 @@ try {
 
   check(panel.hasSection, '真实 DOM 里存在 .dshsm-section')
   check(panel.names.length > 0, '读到了技能名', panel.names.slice(0, 8).join('、'))
-  check(panel.tabLabels.length >= 2, '标签页（技能 / 回收站）在', panel.tabLabels.join(' / '))
   check(panel.scopeLine.length > 0, '显示了项目根的解析依据', panel.scopeLine.slice(0, 120))
   if (panel.notice) notes.push(`面板提示：${panel.notice.slice(0, 200)}`)
   console.log(`     面板正文：${JSON.stringify(panel.text.slice(0, 400))}`)
@@ -859,7 +813,6 @@ try {
       return {
         pills: row ? Array.from(row.querySelectorAll('.dshsm-pill')).map((el) => el.innerText.trim()) : [],
         notice: notice ? notice.innerText.trim() : '',
-        tabs: Array.from(document.querySelectorAll('.dshsm-tab')).map((el) => el.innerText.trim()),
       }
     })()`)
     console.log(`     该行的标签：${after.pills.join(' / ') || '（无）'}`)
@@ -892,7 +845,7 @@ try {
   check(false, `浏览器验收中断：${error instanceof Error ? error.message : String(error)}`)
 } finally {
   // 保险：不管演练在哪一步炸了，都不许把临时技能留在用户的技能目录里。
-  // 上一次就是清场那几步断言失败、界面停在回收站标签页，结果 `browser-probe-tmp`
+  // 上一次就是清场那几步断言失败，结果 `browser-probe-tmp`
   // 真的进了模型可见的技能清单 —— 验收工具本身污染被验收的环境，是最不该发生的事。
   if (exercise || doImportExercise) {
     for (const stray of ['browser-probe-tmp', 'probe-zip', 'probe-md', 'probe-dir']) {

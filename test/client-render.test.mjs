@@ -68,7 +68,6 @@ function catalog(overrides = {}) {
         }),
       ],
       diagnostics: [],
-      trash: [],
       damaged: null,
       logPath: null,
       cwd: 'F:/project/alpha',
@@ -100,7 +99,6 @@ test('挂载时拉取目录，并把技能、来源与状态渲染出来', async
   assert.match(text, /dropped/)
   assert.match(text, /保留的技能/, '描述必须出现')
   assert.match(text, /user-dsh/, '来源徽标必须出现')
-  assert.match(text, /回收站/, '标签页必须出现')
   assert.match(text, /手动停用/, '被覆盖过的技能要标出来')
 })
 
@@ -156,18 +154,14 @@ test('被遮蔽的技能不当作生效项，且开关被禁用', async () => {
   assert.match(textOf(tree), /被同名技能遮蔽|遮蔽/)
 })
 
-test('回收站标签页显示条目计数', async () => {
-  const fetch = makeFetch({
-    '/dsh-skills-manager/catalog': catalog({
-      trash: [{ id: 'dsh/old', name: 'old', source: 'user-dsh', originalPath: 'C:\\home\\.dsh\\skills\\old', deletedAt: '2026-01-02T03:04:05.000Z' }],
-    }),
-  })
+test('没有标签页，也没有搜索框 —— 面板直接就是技能列表', async () => {
+  // 按用户要求把搜索和回收站整套拿掉后，标签行与搜索框都不该再渲染。
+  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
   const client = loadClient({ fetch })
   const tree = await client.mount()
-  const trashTab = findAll(tree, (node) => node.props?.className === 'dshsm-tab').find((node) => textOf(node).includes('回收站'))
-  assert.ok(trashTab, '必须有回收站标签页')
-  assert.match(textOf(trashTab), /1/, '回收站计数应当显示为 1')
-  assert.ok(findFirst(tree, (node) => node.props?.className === 'dshsm-switch'), '技能标签页的开关仍然在')
+  assert.equal(findAll(tree, (node) => node.props?.className === 'dshsm-tab').length, 0, '不该再有标签页')
+  assert.equal(findAll(tree, (node) => node.props?.className === 'dshsm-search').length, 0, '不该再有搜索框')
+  assert.ok(findFirst(tree, (node) => node.props?.className === 'dshsm-switch'), '列表和开关照旧在')
 })
 
 test('被 DSH 丢弃的技能显示「不可加载」并禁用开关', () => {

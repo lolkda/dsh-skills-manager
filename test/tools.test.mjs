@@ -233,20 +233,16 @@ test('skills_set_enabled 真的改了策略，而且没有动源文件', async (
   }
 })
 
-test('skills_delete 移进回收站，可以再恢复', async () => {
+test('skills_delete 永久删除，磁盘上不留痕迹', async () => {
   const env = setup()
   try {
     await env.call('skills_create', { name: 'tool-doomed', description: '待删', body: '正文' })
     const deleted = await env.call('skills_delete', { name: 'tool-doomed' })
     assert.equal(deleted.value.ok, true, JSON.stringify(deleted.value))
-    assert.equal(existsSync(join(env.home, 'skills', 'tool-doomed')), false, '源文件应当已移走')
+    assert.equal(existsSync(join(env.home, 'skills', 'tool-doomed')), false, 'bundle 的整个目录都要没了')
 
     const listed = await env.call('skills_list')
     assert.equal(listed.text.includes('tool-doomed'), false, '删掉之后不该还列着它')
-
-    // 工具只到"移进回收站"为止 —— 恢复走界面/接口。这里确认它确实进了回收站。
-    const trash = deleted.value.trash ?? deleted.value.id
-    assert.ok(trash !== undefined, '删除结果里要给出回收站条目，否则用户找不回来')
   } finally {
     env.cleanup()
   }

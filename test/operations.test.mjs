@@ -7,10 +7,7 @@ import test from 'node:test'
 import {
   createSkill,
   importFiles,
-  listTrash,
-  moveToTrash,
-  purgeFromTrash,
-  restoreFromTrash,
+  deleteSkill,
   within,
   writeSkillContent,
 } from '../lib/operations.js'
@@ -93,48 +90,45 @@ test('writeSkillContent 拒绝会把技能弄坏的内容', () => {
   }
 })
 
-test('回收站：移入、列出、恢复、永久删除', () => {
+test('删除技能：bundle 删整个目录，平铺文件删那个文件', () => {
   const f = fixture()
   try {
     const created = createSkill({ root: f.root, name: 'demo', description: 'x' })
-    const skill = { name: 'demo', entryName: 'demo', kind: 'bundle', docPath: created.path }
-
-    const trashed = moveToTrash({ dshHome: f.dshHome, root: f.root, skill })
-    assert.equal(trashed.ok, true, trashed.ok ? '' : trashed.error)
-    assert.equal(existsSync(join(f.root.path, 'demo')), false, '原位置必须已经空了')
-
-    const items = listTrash(f.dshHome)
-    assert.equal(items.length, 1)
-    assert.equal(items[0].name, 'demo')
-    assert.equal(items[0].rootKey, 'dsh')
-
-    const restored = restoreFromTrash({ dshHome: f.dshHome, id: trashed.id, roots: [f.root] })
-    assert.equal(restored.ok, true, restored.ok ? '' : restored.error)
-    assert.equal(existsSync(join(f.root.path, 'demo', 'SKILL.md')), true)
-    assert.equal(listTrash(f.dshHome).length, 0, '恢复后回收站条目应被清掉')
-
-    const again = moveToTrash({ dshHome: f.dshHome, root: f.root, skill })
-    const purged = purgeFromTrash({ dshHome: f.dshHome, id: again.id })
-    assert.equal(purged.ok, true)
-    assert.equal(listTrash(f.dshHome).length, 0)
+    const result = deleteSkill({ root: f.root, skill: { name: 'demo', entryName: 'demo', kind: 'bundle', docPath: created.path } })
+    assert.equal(result.ok, true, result.ok ? '' : result.error)
+    assert.equal(existsSync(join(f.root.path, 'demo')), false, '整个目录都要没了')
+    assert.equal(existsSync(created.path), false)
   } finally {
     f.cleanup()
   }
 })
 
-test('恢复时不覆盖已存在的同名技能', () => {
+test('删除技能：平铺文件只删那个文件，不带走整个目录', () => {
   const f = fixture()
   try {
-    const created = createSkill({ root: f.root, name: 'demo', description: 'x' })
-    const trashed = moveToTrash({
-      dshHome: f.dshHome,
-      root: f.root,
-      skill: { name: 'demo', entryName: 'demo', kind: 'bundle', docPath: created.path },
-    })
-    createSkill({ root: f.root, name: 'demo', description: '重新建的' })
-    const restored = restoreFromTrash({ dshHome: f.dshHome, id: trashed.id, roots: [f.root] })
-    assert.equal(restored.ok, false)
-    assert.equal(restored.code, 'skill.exists')
+    const docPath = join(f.root.path, 'flat.md')
+    writeFileSync(docPath, ['---', 'name: flat', 'description: x', '---', '正文', ''].join(String.fromCharCode(10)), 'utf8')
+    writeFileSync(join(f.root.path, 'unrelated.md'), '别人的文件', 'utf8')
+    const result = deleteSkill({ root: f.root, skill: { name: 'flat', entryName: 'flat', kind: 'flat', docPath } })
+    assert.equal(result.ok, true, result.ok ? '' : result.error)
+    assert.equal(existsSync(docPath), false)
+    assert.equal(existsSync(join(f.root.path, 'unrelated.md')), true, '同目录下别的文件一个都不能碰')
+  } finally {
+    f.cleanup()
+  }
+})
+
+test('删除技能：只读根不给删，越界路径不给删', () => {
+  const f = fixture()
+  try {
+    const readOnly = { ...f.root, mutable: false }
+    const blocked = deleteSkill({ root: readOnly, skill: { name: 'demo', entryName: 'demo', kind: 'bundle', docPath: join(f.root.path, 'demo', 'SKILL.md') } })
+    assert.equal(blocked.ok, false)
+    assert.equal(blocked.code, 'root.readOnly')
+
+    const escaped = deleteSkill({ root: f.root, skill: { name: 'x', entryName: 'x', kind: 'bundle', docPath: join(f.root.path, '..', '..', 'victim', 'SKILL.md') } })
+    assert.equal(escaped.ok, false)
+    assert.equal(escaped.code, 'path.escape')
   } finally {
     f.cleanup()
   }

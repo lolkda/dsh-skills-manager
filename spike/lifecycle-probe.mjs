@@ -102,7 +102,6 @@ function check(ok, label, detail) {
 console.log(`目标实例：${base}`)
 console.log(`工作目录：${cwd}\n`)
 
-let trashIds = []
 try {
   console.log('1) 新建技能')
   const created = await call('/dsh-skills-manager/skill/create', {
@@ -157,56 +156,29 @@ try {
   check(broken.ok === false, '非法 frontmatter 被拒绝', JSON.stringify(broken.code ?? ''))
   check(readFileSync(file, 'utf8') === before, '被拒绝的保存没有碰磁盘上的文件')
 
-console.log('\n3) 删除进回收站')
-  const trashed = await call('/dsh-skills-manager/skill/trash', { rootKey: USER_ROOT, name: CREATED })
-  check(trashed.ok === true, 'POST /skill/trash 成功', JSON.stringify(trashed.error ?? ''))
-  check(existsSync(join(dshHome, 'skills', CREATED, 'SKILL.md')) === false, '源文件已从技能目录移走')
-
-  const catalog = await call('/dsh-skills-manager/catalog')
-  const entry = (catalog.data.trash ?? []).find((item) => item.name === CREATED)
-  check(entry !== undefined, '回收站里能查到它')
-  if (entry) trashIds.push(entry.id)
+console.log('')
+console.log('3) 删除技能（永久删除）')
+  const deleted = await call('/dsh-skills-manager/skill/delete', { rootKey: USER_ROOT, name: CREATED })
+  check(deleted.ok === true, 'POST /skill/delete 成功', JSON.stringify(deleted.error ?? ''))
+  check(existsSync(join(dshHome, 'skills', CREATED)) === false, '整个目录都已从技能目录删掉')
 
   names = await sessionSkills()
   check(names.includes(CREATED) === false, '新会话里已经看不到它')
   check(names.includes(IMPORTED), '没被删的那条不受影响')
 
-  console.log('\n4) 从回收站恢复')
-  const restored = await call('/dsh-skills-manager/trash/restore', { id: trashIds[0] })
-  check(restored.ok === true, 'POST /trash/restore 成功', JSON.stringify(restored.error ?? ''))
-  check(existsSync(join(dshHome, 'skills', CREATED, 'SKILL.md')), '文件回到技能目录')
-
-  names = await sessionSkills()
-  check(names.includes(CREATED), '新会话里又看得到它')
 } finally {
   if (!keep) {
-    console.log('\n5) 清理')
-    const catalog = await call('/dsh-skills-manager/catalog').catch(() => undefined)
-    const pending = [...trashIds, ...((catalog?.data?.trash ?? []).map((item) => item.id))]
-    for (const item of [...new Set(pending)]) {
-      const purged = await call('/dsh-skills-manager/trash/purge', { id: item }).catch(() => undefined)
-      console.log(`  清除回收站条目 ${item}：${purged?.ok === true ? 'ok' : JSON.stringify(purged?.error ?? purged)}`)
-    }
+    console.log('')
+    console.log('4) 清理')
     for (const name of [CREATED, IMPORTED]) {
       if (existsSync(join(dshHome, 'skills', name))) {
-        const late = await call('/dsh-skills-manager/skill/trash', { rootKey: USER_ROOT, name }).catch(() => undefined)
-        console.log(`  兜底删除 ${name}：${late?.ok === true ? '已移入回收站' : JSON.stringify(late?.error ?? '')}`)
+        const late = await call('/dsh-skills-manager/skill/delete', { rootKey: USER_ROOT, name }).catch(() => undefined)
+        console.log(`  删除 ${name}：${late?.ok === true ? 'ok' : JSON.stringify(late?.error ?? '')}`)
       }
     }
-    // 兜底删除只把技能移进回收站，还要再扫一遍把回收站清空 —— 否则"清理干净了"这句话
-    // 只是把东西挪到了看不见的地方（而且下次同名技能建出来会看起来像有历史覆盖）。
-    const after = await call('/dsh-skills-manager/catalog').catch(() => undefined)
-    for (const entry of after?.data?.trash ?? []) {
-      if (entry.name !== CREATED && entry.name !== IMPORTED) continue
-      const purged = await call('/dsh-skills-manager/trash/purge', { id: entry.id }).catch(() => undefined)
-      console.log(`  清空回收站 ${entry.name}：${purged?.ok === true ? 'ok' : JSON.stringify(purged?.error ?? '')}`)
-    }
+
     const left = [CREATED, IMPORTED].filter((name) => existsSync(join(dshHome, 'skills', name)))
     check(left.length === 0, '临时技能已离开技能目录', left.join(', '))
-    // 必须重新取一次目录：`after` 是清空**之前**的快照，拿它断言只会证明我读了旧数据。
-    const settled = await call('/dsh-skills-manager/catalog').catch(() => undefined)
-    const rest = (settled?.data?.trash ?? []).filter((entry) => entry.name === CREATED || entry.name === IMPORTED)
-    check(rest.length === 0, '回收站里也没有残留', rest.map((entry) => entry.name).join(', '))
   }
 }
 

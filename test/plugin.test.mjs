@@ -127,7 +127,7 @@ test('agent 上下文没有作用域标记时如实报告，而不是退回 glob
   }
 })
 
-test('GET /catalog 返回根、技能与回收站视图', async () => {
+test('GET /catalog 返回根与技能视图', async () => {
   const env = await boot()
   try {
     const response = await env.request('GET', '/dsh-skills-manager/catalog')
@@ -139,7 +139,6 @@ test('GET /catalog 返回根、技能与回收站视图', async () => {
     const plain = response.data.skills.find((s) => s.name === 'plain')
     assert.equal(plain.winner, true)
     assert.equal(plain.effectiveModelInvocable, true)
-    assert.deepEqual(response.data.trash, [])
     assert.ok(response.data.roots.some((r) => r.key === 'dsh'))
   } finally {
     env.cleanup()
@@ -230,18 +229,13 @@ test('POST /skill/save 拒绝会弄坏技能的正文', async () => {
   }
 })
 
-test('回收站路由：移入、恢复', async () => {
+test('删除端点：文件真的从磁盘上没了', async () => {
   const env = await boot()
   try {
-    const trashed = await env.request('POST', '/dsh-skills-manager/skill/trash', { rootKey: 'dsh', name: 'plain' })
-    assert.equal(trashed.ok, true, trashed.error)
-    assert.equal(existsSync(join(env.home, 'skills', 'plain')), false)
-    assert.equal(trashed.catalog.trash.length, 1)
-    const id = trashed.catalog.trash[0].id
-
-    const restored = await env.request('POST', '/dsh-skills-manager/trash/restore', { id })
-    assert.equal(restored.ok, true, restored.error)
-    assert.equal(existsSync(join(env.home, 'skills', 'plain', 'SKILL.md')), true)
+    const deleted = await env.request('POST', '/dsh-skills-manager/skill/delete', { rootKey: 'dsh', name: 'plain' })
+    assert.equal(deleted.ok, true, deleted.error)
+    assert.equal(existsSync(join(env.home, 'skills', 'plain')), false, 'bundle 的整个目录都要没了')
+    assert.equal(deleted.catalog.skills.some((s) => s.name === 'plain'), false, '目录里也不该再有它')
   } finally {
     env.cleanup()
   }
@@ -251,7 +245,7 @@ test('删除技能会一并清掉它的启停覆盖', async () => {
   const env = await boot()
   try {
     await env.request('POST', '/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
-    await env.request('POST', '/dsh-skills-manager/skill/trash', { rootKey: 'dsh', name: 'plain' })
+    await env.request('POST', '/dsh-skills-manager/skill/delete', { rootKey: 'dsh', name: 'plain' })
     const state = JSON.parse(readFileSync(join(env.home, 'dsh-skills-manager', 'state.json'), 'utf8'))
     assert.deepEqual(state.overrides.dsh ?? {}, {}, '同名技能以后重建时不该继承旧的停用状态')
   } finally {

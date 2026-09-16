@@ -117,7 +117,6 @@ const fetchStub = makeFetch({
       ],
       overrides: {},
       diagnostics: [],
-      trash: [],
       damaged: null,
       logPath: null,
     },
