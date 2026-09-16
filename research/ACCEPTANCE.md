@@ -856,3 +856,46 @@ jsonSchemaToTs(definition.parameters) 里不能出现 "unknown"     // 能渲染
 ```
 
 不照着源码重写一遍规则：规则会随 DSH 变，重写的那份不会。
+
+## 25. 启停顺带把技能的 whenToUse 弄丢了
+
+上一节的教训是"顺着框架的真实契约查"。这一节把同样的方法用到**最核心的接缝**上：`ctx.skills`
+的提供方接口。
+
+`<redacted>` 只读 `provider.name`，不深度校验。真正会咬人的是候选的形状。对比文件系统提供方
+产出的候选，发现它带 `whenToUse` / `metadata` / `content` / `invocation` / `resourceBase` —— 而我
+的覆盖候选**只带了后者**。
+
+关键是：覆盖候选会**整条**取代文件系统的候选（同层 rank 0 胜出）。所以：
+
+> 一条技能**只要被启停过一次**，它的 `whenToUse` 就会对所有下游消费者消失。
+
+### 先确认它真的有人读
+
+不假设。查下来：
+
+- `dsh-skill/lib/index.js:441,449` 把 `whenToUse` / `metadata` 原样放进解析后的技能记录，传给下游；
+- `whenToUse` 在 `dsh-tool-cordis`、`dsh-api-session-controller`、各个 client bundle 里都有消费；
+- **`metadata` 没有任何地方读** —— 唯一的非 Symbol 命中就是那次透传本身。
+
+顺带发现本插件自己写的 `METADATA_KEY`（`dshSkillsManager`）**也是只写不读**。而这个字段是
+**整份替换**而不是合并，所以我等于"写了一个没人看的东西、换掉了一个真实字段"。既然本插件的
+frontmatter 解析器刻意不解析嵌套映射（复现不了技能自己的 metadata），那就干脆别写。
+
+### 修复与守门测试
+
+- `candidateFor()` / `get()` 都带上 `whenToUse`；
+- 不再往候选里塞 `metadata`。
+
+`test/layers.test.mjs` 新增一条守门测试：在**真注册表 + 真文件系统提供方**下，对比"有覆盖 / 无覆盖"
+两种情况下解析出的记录，要求 `whenToUse`、`description`、`userInvocable` 一字不差。
+
+**并且验证过这条测试真的能抓住它** —— 把转发去掉再跑：
+
+```
+AssertionError: whenToUse 必须原样带过来
+  actual: undefined,
+  expected: '当需要验证覆盖保真度时使用'
+```
+
+抓不住的回归测试等于没有测试。

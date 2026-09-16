@@ -117,6 +117,18 @@ curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 agent session-... 的技能视图：共 9 条 —— apple-liquid-glass、grill-me（模型不可用）、...；与 DSH 实际解析一致（9 条）
 ```
 
+### 覆盖只改变调用策略，不改变技能的其它性质
+
+覆盖提供方的候选会**整条**取代文件系统的候选（同层 rank 0 胜出），所以它必须把技能原有的字段
+一并带过来。`whenToUse` 曾经漏掉：一条技能**只要被启停过一次**，它的 `whenToUse` 就会对所有下游
+消费者消失 —— 界面看不出来，注册表也不报错，只是那条信息没了。现在原样带过来，`test/layers.test.mjs`
+里有一条守门测试（去掉转发即失败）。
+
+本插件**不往候选的 `metadata` 里写自己的标记**：那个字段是**整份替换**而不是合并，写了会连带丢掉
+技能自己 frontmatter 里的 `metadata` —— 而本插件的 frontmatter 解析器刻意不解析嵌套映射，复现不了
+它。反正 DSH 现在没有任何地方读 `skill.metadata`，写了没人看却换掉一个真实字段，不划算。策略覆盖的
+信息由本插件自己的接口（`/overrides`）给出。
+
 ### Agent 工具的参数表只用 DSH 支持的 JSON Schema 子集
 
 `ctx.tools.register` 会校验 `output.schema`，但**完全不校验 `parameters`** —— 参数表写错在注册期
