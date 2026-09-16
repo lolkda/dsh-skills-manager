@@ -691,3 +691,52 @@ Schema）。但那只证明**它们被送出去了**，不证明**叫得动**。
 
 改成盯**在飞的请求数**：连续 3 个节拍都归零才算安静。偶发的测试比没有测试更糟 —— 它会让人
 开始不信任整套测试。
+
+## 22. 真实浏览器：在真 Chrome 里把界面打开一次
+
+前几轮客户端都是用自写的 mini React 运行时测的。那能证明"服务端送出的字节能注册出面板"，
+但证明不了真实 React、真实插件加载器、真实 DOM 这一整套 —— 而用户看到的正是后者。
+
+机器上有 Chrome，Node 24 又自带 `WebSocket`，于是用 CDP（就是一个 WebSocket 上的 JSON-RPC）
+直接驱动真实浏览器，**不装任何 npm 包**，用独立的 `--user-data-dir` 起进程，不碰用户正在用的
+那个实例。见 `spike/browser-probe.mjs`。
+
+真实浏览器里的结果：
+
+```
+✔ 页面加载完成 / 应用挂载完成             标题：DeepSeek Harness
+✔ 本插件的样式注入到了真实 DOM 里         已注入的插件样式里有 dsh-skills-manager
+✔ 点得到设置入口 —— 设置
+✔ 设置里找得到「技能」条目
+✔ 技能行渲染出来了
+✔ 读到了技能名 —— apple-liquid-glass、frontend-ui-system、grill-me、grilling、
+                 improve-codebase-architecture、python-typed-development-standards、
+                 refactor、reverse-flow
+✔ 标签页（技能 / 回收站）在 —— 技能 9 / 回收站
+✔ 显示了项目根的解析依据 —— 项目根按 F:\project\抖音 解析 .dsh/skills 与 .agents/skills
+     面板提示：已与 DSH 实际解析核对：9 条一致
+✔ 页面没有报错 —— （无）
+```
+
+顺带确认了槽位契约：设置里的条目顺序是
+`通用设置 | 手机访问 | 模型 | 插件 | Agent 预设 | 插件市场 | 提示词 | 技能` ——
+本插件排在 `提示词`（prompt-manager，order 61）之后。
+
+### 在真实 DOM 里点开关，并做独立验证
+
+这一条是目标里最硬的要求：**启停必须真实作用到活动会话**。做法是在真实浏览器里点真实开关，
+然后**不看界面**，去看模型实际收到的系统提示词：
+
+| 步骤 | 证据 |
+|---|---|
+| 点「grilling」的开关（关） | 真实 `POST /dsh-skills-manager/policy`，体 `{"rootKey":"dsh","name":"grilling","enabled":false}` |
+| 界面自己怎么说 | 行标签变成 `user-dsh / 手动停用`；开关无障碍名 `停用 grilling` |
+| **独立视图：会话** | 系统提示词里 `grilling` **未出现**；`apple-liquid-glass`、`refactor` 等照旧出现 |
+| 再点一次开关（开） | 真实 `POST … {"enabled":true}`；行标签 `手动启用` |
+| **独立视图：会话** | `grilling` **重新出现** |
+| 源文件 | 全过程 `sha256` 一字节未变 |
+| 清理 | `state.json` 回到 `{"version":1,"overrides":{}}` |
+
+只问界面是让被告自己作证。所以每一步都另开一个会话读提示词来对。
+
+（`grill-me` 本来就不进模型提示词 —— 它是用户手动调用的技能，不是漏报。）

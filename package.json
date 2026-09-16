@@ -24,7 +24,8 @@
     "probe:lifecycle": "node spike/lifecycle-probe.mjs",
     "probe:project": "node spike/project-root-probe.mjs",
     "probe:client": "node spike/client-bundle-probe.mjs",
-    "check": "node --check client/client.js && node --test"
+    "check": "node --check client/client.js && node --test",
+    "probe:browser": "node spike/browser-probe.mjs"
   },
   "dsh": {
     "bundle": {
