@@ -294,3 +294,45 @@ apple-liquid-glass: loadable=false
 > • 第 2 行的值无法作为 YAML 标量解析（冒号后跟空格会被当成嵌套映射；把整个值用引号包起来即可），DSH 会因此丢弃整条技能
 
 这个 bug 是**靠会话级证据才发现的** —— 只看宿主层或只看插件自报，两边都显示正常。
+
+## 14. 用插件自己的编辑路径修好一条技能，并再次用会话验证
+
+第 13 节那个 bug 的修法是改插件的判断；但 `apple-liquid-glass` 这个文件本身也确实是坏的。
+用户选择"用插件自己的编辑器改写"。这件事顺带成了一次比启停更彻底的端到端验证 ——
+**一次编辑直接改变了新会话所能看到的技能集合**。
+
+`spike/repair-frontmatter.mjs` 干这件事，但它不绕开插件：目录来自 `lib/catalog.js`，
+值来自 `lib/frontmatter.js` 的解析与 `quoteScalar`，写入与最终校验来自 `lib/operations.js`
+的 `writeSkillContent`（先 `readSkillDocument` 校验，不合格就拒绝写入）。
+
+两处实现细节值得记：
+
+1. **逐行原位替换，不做"解析后拼回去"。** 第一版用 `splitDocument` 拆再拼，结果文件短了
+   87 个字符 —— 因为 `splitDocument` 会把整份文档的换行统一成 LF，而这是个 CRLF 文件，
+   107 个 `` 全被吃掉了。逐行替换后：改动行数 1、字节 15124 → 15142（正好是 2 个外引号
+   加 16 个转义引号）、CRLF 仍是 107 个、裸 LF 0 个。
+2. 备份写到插件自己的状态目录 `~/.dsh/dsh-skills-manager/backups/`，而不是技能目录旁边 ——
+   放旁边有被当成技能文件扫到的风险。
+
+`diff` 结果（只有第 3 行）：
+
+```
+3c3
+< description: Build Apple-grade UI — the "macOS Liquid Glass" aesthetic — ...
+---
+> description: "Build Apple-grade UI — the \"macOS Liquid Glass\" aesthetic — ..."
+```
+
+改完后新建会话：
+
+```
+{"ts":"2026-09-16T05:21:41.194Z","event":"scope-snapshot","detail":"agent session-probe-1789536096960 的技能视图：共 9 条 —— apple-liquid-glass、frontend-ui-system、grill-me（模型不可用）、grilling、improve-codebase-architecture（模型不可用）、python-typed-development-standards、refactor、reverse-flow、test-driven-development"}
+```
+
+| | 会话视图 |
+|---|---|
+| 修复前 | 8 条，`apple-liquid-glass` 缺席 |
+| 修复后 | **9 条**，`apple-liquid-glass` 在列 |
+
+我们自己的目录同步变成 9 条、`loadable=true`。这条闭环把「读文件 → 编辑 → 写回 → DSH 真的加载」
+整条链路都走通了，而不只是启停那一环。
