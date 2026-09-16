@@ -172,13 +172,24 @@ export function loadClient(options = {}) {
   }
   const runtime = createRuntime()
   const React = createReact(runtime)
+  // 数一数还有几个请求没回来 —— flush 靠它判断"真的安静了"。
+  let inflight = 0
+  const rawFetch = options.fetch ?? (() => Promise.reject(new Error('测试里未提供 fetch')))
+  const trackedFetch = (...args) => {
+    inflight += 1
+    return Promise.resolve()
+      .then(() => rawFetch(...args))
+      .finally(() => {
+        inflight -= 1
+      })
+  }
   const sandbox = {
     window,
     document,
     console,
     setTimeout,
     clearTimeout,
-    fetch: options.fetch ?? (() => Promise.reject(new Error('测试里未提供 fetch'))),
+    fetch: trackedFetch,
   }
   sandbox.globalThis = sandbox
   vm.runInContext(source, vm.createContext(sandbox), { filename: options.filename ?? 'client/client.js' })
@@ -212,9 +223,26 @@ export function loadClient(options = {}) {
     },
   })
 
-  /** 等异步的副作用（fetch 链）落地。 */
-  const flush = async (turns = 8) => {
-    for (let i = 0; i < turns; i += 1) await new Promise((resolve) => setTimeout(resolve, 0))
+  /**
+   * 等异步副作用（fetch 链）真的落地。
+   *
+   * 不能只等固定几个节拍：全链路测试里 fetch 走的是真实文件 I/O，负载高时一次往返可能超过
+   * 8 个节拍，于是断言跑在数据到达之前 —— 表现为"单跑能过、全量偶发失败"。那种偶发比没有
+   * 测试更糟。所以盯住**在飞的请求数**：连续几个节拍都归零才算安静。
+   * @param {number} [turns] - 最多等多少个节拍
+   * @returns {Promise<void>} 完成
+   */
+  const flush = async (turns = 200) => {
+    let idle = 0
+    for (let i = 0; i < turns; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (inflight > 0) {
+        idle = 0
+        continue
+      }
+      idle += 1
+      if (idle >= 3) return
+    }
   }
   /** 渲染一次并跑掉本次产生的副作用（同步部分）。 */
   const render = () => {
