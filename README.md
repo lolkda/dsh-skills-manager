@@ -117,6 +117,13 @@ curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 agent session-... 的技能视图：共 9 条 —— apple-liquid-glass、grill-me（模型不可用）、...；与 DSH 实际解析一致（9 条）
 ```
 
+### Agent 工具只写用户根
+
+暴露给 Agent 的七个 `skills_*` 工具**不接受 `rootKey`**：新建与导入一律落在用户根
+（`$DSH_HOME/skills`）。不该让模型随手挑一个根去写。要跨根操作，`skills_set_enabled` 会自己
+找到当前胜出的那一条，并作用于它所在的根（包括项目根与只读的 bundled 根 —— 后者只允许启停，
+不允许改文件）。参数表里 `additionalProperties: false`，多传的字段会被框架挡在门外。
+
 ### `loadable` 的含义是「DSH 会不会真的加载它」
 
 DSH 用真正的 `yaml` 库解析 frontmatter，任何解析失败都会让**整条技能被丢弃**。本插件是手写的 YAML 子集，所以对这类写法一律**明确报错**，而不是"能读出来就算数"：
