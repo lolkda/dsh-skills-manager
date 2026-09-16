@@ -221,15 +221,28 @@ test('有多个候选目录时给出选择器，切换后按新目录重新解�
     '/dsh-skills-manager/catalog': catalog({ candidates: ['F:/project/alpha', 'F:/project/beta'] }),
   })
   const client = loadClient({ fetch })
-  const tree = await client.mount()
+  let tree = await client.mount()
 
-  const select = findFirst(tree, (node) => node.props?.className === 'dshsm-scope-select')
-  assert.ok(select, '多于一个候选时必须是选择器，而不是替用户猜')
-  assert.equal(select.props.value, 'F:/project/alpha')
-  // children 可能是嵌套数组（组件返回数组时），直接数整棵树里的 option 更可靠。
-  assert.equal(findAll(tree, (node) => node.type === 'option').length, 2)
+  const trigger = findFirst(tree, (node) => node.props?.className === 'dshsm-select__trigger')
+  assert.ok(trigger, '多于一个候选时必须是选择器，而不是替用户猜')
+  assert.equal(trigger.props['aria-expanded'], 'false', '没点之前菜单是收起的')
+  assert.equal(findFirst(tree, (node) => node.props?.className === 'dshsm-menu'), undefined, '收起时不该有菜单')
+  assert.match(textOf(trigger), /F:\/project\/alpha/, '按钮上显示当前选中的目录')
 
-  select.props.onChange({ target: { value: 'F:/project/beta' } })
+  // 走真实交互：点开 → 点某一项。直接戳 onChange 覆盖不到「菜单到底有没有渲染出来」。
+  trigger.props.onClick()
+  tree = await client.update()
+  assert.ok(findFirst(tree, (node) => node.props?.className === 'dshsm-menu'), '点开之后必须出现菜单')
+  assert.equal(findFirst(tree, (node) => node.props?.className === 'dshsm-select__trigger').props['aria-expanded'], 'true')
+
+  const items = findAll(tree, (node) => String(node.props?.className ?? '').startsWith('dshsm-menu__item'))
+  assert.equal(items.length, 2, '两个候选就该有两项')
+  const beta = items.find((node) => textOf(node).includes('beta'))
+  assert.ok(beta, '菜单里要能找到 beta')
+  // 当前值那一项右边有对勾，另一项没有 —— DSH 的菜单就是这样表示当前值的。
+  assert.equal(findAll(tree, (node) => node.props?.className === 'dshsm-menu__check').length, 1, '只有当前值那一项带对勾')
+
+  beta.props.onClick()
   await client.update()
   const latest = fetch.calls.filter((call) => call.url.startsWith('/dsh-skills-manager/catalog')).pop()
   assert.match(latest.url, /beta/, '切换后要按新目录重新解析')

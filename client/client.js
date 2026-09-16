@@ -19,7 +19,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
 
     const h = React.createElement
-    const { useCallback, useEffect, useMemo, useState } = React
+    const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     /** 宿主路由前缀，必须与 lib/routes.js 的 ROUTE_PREFIX 一致。 */
     const ROUTE = '/dsh-skills-manager'
@@ -388,6 +388,98 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // 两个图标的 path 逐字取自 DSH 自己的选择器（`dsh-client-locale` 的 LanguageRow 与
+    // shell 的 Menu），照抄是为了让形状完全一致 —— 手画一个"差不多的"箭头骗不过眼睛。
+    const CHEVRON_PATH =
+      'M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z'
+    const CHECK_PATH =
+      'M15.0498 3.92579L8.49512 12.3818C8.25774 12.6881 8.04517 12.9645 7.84668 13.1689C7.63957 13.3823 7.38732 13.5841 7.04492 13.6719C6.86373 13.7183 6.6757 13.7346 6.48926 13.7197C6.13666 13.6915 5.8528 13.5355 5.6123 13.3604C5.38201 13.1926 5.12573 12.9567 4.83984 12.6953L1.03125 9.21289L1.96875 8.1875L5.77734 11.6699C6.08684 11.9529 6.27773 12.1249 6.43066 12.2363C6.50183 12.2882 6.54699 12.3135 6.57324 12.3252C6.58525 12.3305 6.59269 12.3322 6.5957 12.333C6.59802 12.3336 6.59961 12.334 6.59961 12.334C6.63317 12.3367 6.66758 12.3335 6.7002 12.3252C6.7002 12.3252 6.70211 12.3251 6.7041 12.3242C6.70698 12.3229 6.71348 12.319 6.72461 12.3115C6.74849 12.2956 6.78843 12.2642 6.84961 12.2012C6.98138 12.0654 7.13957 11.8628 7.39648 11.5313L13.9502 3.07422L15.0498 3.92579Z'
+
+    /**
+     * 自绘下拉。
+     *
+     * **不用原生 `<select>`** —— 它的外观和弹出的那一层都是操作系统画的（Windows 上是
+     * 深蓝高亮），完全脱离 DSH 的设计语言，改 CSS 也管不到弹层。DSH 自己的选择器是
+     * 「pill 按钮 + chevron + 独立菜单层」，这里照它的几何与令牌实现一份。
+     * @param {object} props - `value` / `options` / `onChange`
+     * @returns {object} 元素
+     */
+    function ScopeSelect(props) {
+      const [open, setOpen] = useState(false)
+      const boxRef = useRef(null)
+
+      // 点外面关掉。用 document 上的监听而不是触发按钮的 onBlur —— 菜单里那一项被按下时
+      // 焦点会先离开触发按钮，用 blur 会在选择生效之前就把菜单收掉。
+      useEffect(() => {
+        if (!open) return undefined
+        const onPointerDown = (event) => {
+          if (boxRef.current && !boxRef.current.contains(event.target)) setOpen(false)
+        }
+        const onKeyDown = (event) => {
+          if (event.key === 'Escape') setOpen(false)
+        }
+        document.addEventListener('mousedown', onPointerDown)
+        document.addEventListener('keydown', onKeyDown)
+        return () => {
+          document.removeEventListener('mousedown', onPointerDown)
+          document.removeEventListener('keydown', onKeyDown)
+        }
+      }, [open])
+
+      const current = props.value
+      return h(
+        'div',
+        { className: 'dshsm-select', ref: boxRef },
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'dshsm-select__trigger',
+            'aria-haspopup': 'menu',
+            'aria-expanded': open ? 'true' : 'false',
+            title: current,
+            onClick: () => setOpen(!open),
+          },
+          h('span', { className: 'dshsm-select__value' }, current),
+          h(
+            'svg',
+            { className: 'dshsm-select__chevron', width: 14, height: 14, viewBox: '0 0 14 14', fill: 'none' },
+            h('path', { d: CHEVRON_PATH, fill: 'currentColor' }),
+          ),
+        ),
+        open
+          ? h(
+              'div',
+              { className: 'dshsm-menu', role: 'menu' },
+              props.options.map((item) =>
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    role: 'menuitem',
+                    key: item,
+                    className: `dshsm-menu__item${item === current ? ' dshsm-menu__item--on' : ''}`,
+                    title: item,
+                    onClick: () => {
+                      setOpen(false)
+                      props.onChange(item)
+                    },
+                  },
+                  h('span', { className: 'dshsm-menu__label' }, item),
+                  item === current
+                    ? h(
+                        'svg',
+                        { className: 'dshsm-menu__check', width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none' },
+                        h('path', { d: CHECK_PATH, fill: 'currentColor' }),
+                      )
+                    : null,
+                ),
+              ),
+            )
+          : null,
+      )
+    }
+
     /** 主分区。 */
     /**
      * 把注册表核对结果渲染成一条提示。
@@ -518,11 +610,7 @@ window.__ModuleLoader__.load({
           { className: 'dshsm-scope' },
           h('span', null, '项目根按'),
           candidates.length > 1
-            ? h(
-                'select',
-                { className: 'dshsm-scope-select', value: cwd ?? '', onChange: (event) => chooseCwd(event.target.value) },
-                candidates.map((item) => h('option', { key: item, value: item }, item)),
-              )
+            ? h(ScopeSelect, { value: cwd ?? '', options: candidates, onChange: chooseCwd })
             : h('code', null, cwd ?? '（未知）'),
           h('span', { className: 'dshsm-scope-hint' }, '解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能'),
         ),
@@ -743,8 +831,21 @@ window.__ModuleLoader__.load({
 .dshsm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
 .dshsm-scope{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}
 .dshsm-scope code{font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:12px}
-.dshsm-scope-select{box-sizing:border-box;height:32px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l3);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;max-width:52ch}
-.dshsm-scope-select:focus{outline:none;border-color:var(--dsw-alias-state-business-primary)}
+/* 下拉：几何、圆角、令牌逐条对齐 DSH 自己的选择器（36px 高 / 18px 圆角 / 无边框 /
+   模块底色，hover 用 interactive-bg-hover），而不是原生控件的观感。 */
+.dshsm-select{position:relative;display:inline-flex;min-width:0}
+.dshsm-select__trigger{display:inline-flex;align-items:center;gap:12px;height:36px;max-width:52ch;padding:0 14px;border:none;border-radius:18px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;line-height:22px;cursor:pointer}
+.dshsm-select__trigger:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshsm-select__value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--ds-font-family-code,ui-monospace,monospace);font-size:13px}
+.dshsm-select__chevron{flex:none}
+/* 阴影用 shell 的 --dsw-elevation-prominent；它最外面那层描边的颜色由
+   --dsw-elevation-stroke-color 决定，不设就会落到一个更黑的默认值（实测 .16 vs .04），
+   所以照 DSH 的菜单规则把它一起设上。 */
+.dshsm-menu{position:absolute;top:calc(100% + 4px);left:0;z-index:100;box-sizing:border-box;display:flex;flex-direction:column;min-width:218px;max-width:360px;padding:4px;border:0;border-radius:20px;background:var(--dsw-specific-menu,#fff);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px rgba(0,0,0,.04),0 3px 8px rgba(0,0,0,.04),0 0 20px rgba(0,0,0,.05))}
+.dshsm-menu__item{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:8px 10px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;font-size:14px;line-height:22px;text-align:left}
+.dshsm-menu__item:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshsm-menu__label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshsm-menu__check{flex:none}
 .dshsm-scope-hint{color:var(--dsw-alias-label-quaternary)}
 
 /* tab 行：朴素文字，选中的加下划线，底下一条发丝线 */

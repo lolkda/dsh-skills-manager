@@ -1107,3 +1107,84 @@ CSS 注释里写了**反引号**（`.dshsm-row__meta` 那种写法），而 CSS 
   删除（两段式确认）、导入三条分支、30 项样式对比、无 JS 报错。
 - `lifecycle-probe.mjs`：**全部通过** —— 含"改动后的描述出现在**模型收到的系统提示**里"
   与"永久删除后新会话里看不到它"。
+
+## 30. 下拉框改用自绘控件（照 DSH 自己的选择器）
+
+用户对着截图说「样式不对 看看dsh的设计」。截图里那个下拉展开后是**操作系统画的深蓝高亮** ——
+因为我用的是一个原生 `<select>`，只改了边框和圆角。**原生控件的弹出层根本不受 CSS 管**，
+所以怎么调都脱离 DSH 的设计语言。
+
+### 先弄清 DSH 自己怎么做
+
+第一反应是去源码里找样式，但先量了一遍真实渲染出来的控件 —— 结果 `document.querySelector('select')`
+在通用设置页返回 **null**：DSH 的「中文 / 浅色 / 紧凑」根本不是 `<select>`。
+
+它是一套自绘控件。逐字抄下来的实现：
+
+```css
+/* 触发按钮：pill，36 高 / 18 圆角 / 无边框 / 模块底色 */
+.hVGvvW_selector{background:var(--dsw-alias-bg-module-platform);height:36px;font:inherit;
+  color:var(--dsw-alias-label-primary);cursor:pointer;border:none;border-radius:18px;
+  align-items:center;gap:12px;padding:0 14px;font-size:14px;line-height:22px;display:inline-flex}
+.hVGvvW_selector:hover{background:var(--dsw-alias-interactive-bg-hover)}
+
+/* 菜单：白底 / 20 圆角 / 4 内边距 */
+._list_1nxmc_8{box-sizing:border-box;padding:4px;display:flex;flex-direction:column;gap:0;border:0;
+  border-radius:20px;background:var(--dsw-specific-menu);
+  --dsw-elevation-stroke-color:var(--dsw-alias-border-l1);box-shadow:var(--dsw-elevation-prominent)}
+._list_1nxmc_8{position:absolute;top:calc(100% + 4px);left:0;z-index:100;min-width:218px;max-width:360px}
+
+/* 菜单项：40 高 / 8px 10px 内边距 / 10 圆角 / 透明底，选中态靠右侧的对勾表示 */
+._item_1nxmc_92{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:8px 10px;
+  border:none;border-radius:10px;background:transparent;cursor:pointer;font-size:14px;
+  line-height:22px;color:var(--dsw-alias-label-primary);text-align:left}
+._item_1nxmc_92:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+._selected_1nxmc_189{background:transparent}
+._itemLabel_1nxmc_174{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+```
+
+两个 SVG 路径（14×14 的箭头、16×16 的对勾）也逐字抄了下来 —— 手画一个「差不多的」箭头骗不过眼睛。
+
+### 一处只有量了才会发现的差别
+
+第一版做完，触发按钮的七项全部对上，菜单也对，**只有阴影不同**：
+
+```
+我们   rgba(0,0,0,0.16) 0 0 0 .5px, ...
+DSH    rgba(0,0,0,0.04) 0 0 0 .5px, ...
+```
+
+原因是 `--dsw-elevation-prominent` 也有一个坑：它最外层那层描边的颜色由
+`--dsw-elevation-stroke-color` 决定，而 DSH 的菜单规则里**显式设了这个变量**，我没设，
+就落到了一个更黑的默认值。把这行补上，阴影逐字节一致。
+
+### 校验做成了自动的，而且参照物是活的
+
+一开始我把这一项塞进了 `auditStyles` 那张对照表，结果它**拿错对象比了** —— 那张表的参照物
+固定取自**提示词页**，而 DSH 的选择器在**通用设置页**（第一次跑出来的"参照"其实是提示词页上
+另一个按钮的 28px 尺寸）。所以拆成独立的 `auditDropdown`：现场切到通用设置页，
+**实时读那个真实控件**再逐项比。写死常量只会在某天悄悄变成错的。
+
+`--styles` 时它会跑 15 项：按钮 7 项（高/左右内边距/圆角/边框/底色/字号）、
+菜单 4 项（圆角/内边距/宽度上下限）、菜单项 4 项（高度/内边距/圆角/图标间距）+ 对勾唯一性。
+
+### 两个顺手的修正
+
+- 测试夹具的 React 替身缺 `useRef`，`document` 桩缺 `addEventListener` —— 都补上了。
+  `useRef` 必须**跨渲染稳定**（真实 React 就是这样），每次渲染新建一个 `{current}` 的话，
+  「点外面关掉」这类逻辑会永远失效。
+- 「有多个候选目录时给出选择器」那条测试原本直接戳 `select.props.onChange`，改成走
+  **真实交互路径**（点开 → 点某一项），顺带断言了菜单真的渲染出来、且只有当前值那一项带对勾。
+
+### 验收
+
+- `node --test`：**125 项全通过**。
+- 真机 `--styles --exercise --exercise-import`：**全部通过**，含新增的 15 项下拉对照。
+- 截图确认过展开态：pill 按钮 + 白色菜单 + 当前项对勾。
+
+### 插曲：F: 盘中途从 Git Bash 的挂载表里消失
+
+改到一半，`/f/project/dsh-skills-manager` 突然 `No such file or directory`，`pwsh` 也 ENOENT。
+`mount` 显示只剩 C: 和 D:。但通过 `~/.dsh/profiles/web/node_modules/@lolkda/dsh-skills-manager`
+这个**符号链接**（指向同一个 F: 目录）却能正常 `cd`、读文件、跑 `git log` —— 说明盘本身是好的，
+只是 MSYS 的挂载点掉了。`mount 'F:' /f` 一条命令就恢复了，仓库完好（`2abb517`）。

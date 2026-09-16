@@ -302,6 +302,113 @@ function doc(name, description) {
  * @param {{notes: string[]}} ctx - 记录
  * @returns {Promise<void>} 完成
  */
+/**
+ * 下拉控件：和通用设置页里 DSH 自己的选择器逐项对比。
+ *
+ * 参照物是**现场读到的那个真实控件**，不是写死的常量 —— 主题一变、或者 DSH 调了尺寸，
+ * 这里会跟着一起动；写死的数字只会在某天悄悄变成错的。
+ *
+ * 之所以单独成一段而不是塞进 `auditStyles` 的对照表：那张表的参照物固定取自**提示词页**，
+ * 而 DSH 的选择器在**通用设置页**，塞进去会拿错对象比（第一次就是这么写错的，
+ * 拿到的"参照"其实是提示词页上另一个按钮的尺寸）。
+ * @param {object} cdp - CDP 客户端
+ * @param {{ notes: Array<string> }} options - 备注收集
+ * @returns {Promise<void>} 完成
+ */
+async function auditDropdown(cdp, { notes: remarks }) {
+  const props = ['height', 'paddingLeft', 'paddingRight', 'borderTopLeftRadius', 'borderTopWidth', 'backgroundColor', 'fontSize']
+  const clickEntry = (label) =>
+    cdp.evaluate(`(() => {
+      const nodes = Array.from(document.querySelectorAll('button, [role=button], li, div'))
+      const target = nodes.find((el) => (el.innerText || '').trim() === ${JSON.stringify(label)})
+      if (!target) return false
+      target.click()
+      return true
+    })()`)
+  const read = (selectors) =>
+    cdp.evaluate(`(() => {
+      let el = null
+      for (const s of ${JSON.stringify(selectors)}) { el = document.querySelector(s); if (el) break }
+      if (!el) return null
+      const cs = getComputedStyle(el)
+      return Object.fromEntries(${JSON.stringify(props)}.map((p) => [p, cs[p]]))
+    })()`)
+
+  // 参照物：通用设置页的语言选择器（DSH 自己的下拉）。
+  await clickEntry('通用设置')
+  await new Promise((resolve) => setTimeout(resolve, 900))
+  const theirs = await read(['[class*=_selector]', 'button[aria-haspopup=menu]'])
+  if (!theirs) {
+    remarks.push('下拉控件：通用设置页里没找到 DSH 的选择器（它换了类名？），本项跳过')
+    await clickEntry('技能')
+    return
+  }
+
+  // 候选目录只有一个时界面不渲染下拉。为了比对，临时给 /catalog 的响应注入几个候选 ——
+  // 这只是**取样手段**，被测代码没被改。第一项用真实 cwd，好让当前值那一项也能出现对勾。
+  await clickEntry('技能')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  await cdp.evaluate(`(() => {
+    const real = window.fetch
+    window.fetch = async (...args) => {
+      const res = await real(...args)
+      const url = String(args[0] && args[0].url ? args[0].url : args[0])
+      if (!url.includes('/dsh-skills-manager/catalog')) return res
+      const body = await res.clone().json()
+      if (body && body.data) body.data.candidates = [body.data.cwd, 'F:/project/抖音', 'D:/Personal/Desktop/样例目录']
+      return new Response(JSON.stringify(body), { status: res.status, headers: { 'content-type': 'application/json' } })
+    }
+    return true
+  })()`)
+  await clickEntry('通用设置')
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  await clickEntry('技能')
+  await new Promise((resolve) => setTimeout(resolve, 900))
+
+  const mine = await read(['.dshsm-select__trigger'])
+  if (!mine) {
+    check(false, '下拉控件：注入了候选之后仍然没渲染出来')
+    remarks.push('下拉控件：未渲染，本项未验证')
+    return
+  }
+  for (const prop of props) {
+    check(mine[prop] === theirs[prop], `下拉按钮.${prop} 与 DSH 的选择器一致`, `我们 ${mine[prop]} / DSH ${theirs[prop]}`)
+  }
+
+  // 菜单层与菜单项：收起时不存在，得点开才量得到。DSH 那边同样要展开，这里只校验
+  // 我们自己画的那一层有没有照它的几何来（圆角 20 / 内边距 4 / 项高 40 / 项圆角 10）。
+  const menu = await cdp.evaluate(`(() => {
+    const t = document.querySelector('.dshsm-select__trigger')
+    if (!t) return null
+    t.click()
+    return true
+  })()`)
+  if (menu) {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const box = await cdp.evaluate(`(() => {
+      const m = document.querySelector('.dshsm-menu')
+      const it = document.querySelector('.dshsm-menu__item')
+      if (!m || !it) return null
+      const mc = getComputedStyle(m)
+      const ic = getComputedStyle(it)
+      return { radius: mc.borderRadius, padding: mc.padding, minWidth: mc.minWidth, maxWidth: mc.maxWidth, itemHeight: ic.minHeight, itemPadding: ic.padding, itemRadius: ic.borderRadius, itemGap: ic.gap }
+    })()`)
+    if (box) {
+      check(box.radius === '20px', '菜单圆角 20px（照 DSH 的菜单）', box.radius)
+      check(box.padding === '4px', '菜单内边距 4px', box.padding)
+      check(box.minWidth === '218px' && box.maxWidth === '360px', '菜单宽度 218–360px', `${box.minWidth}–${box.maxWidth}`)
+      check(box.itemHeight === '40px', '菜单项最小高度 40px', box.itemHeight)
+      check(box.itemPadding === '8px 10px', '菜单项内边距 8px 10px', box.itemPadding)
+      check(box.itemRadius === '10px', '菜单项圆角 10px', box.itemRadius)
+      check(box.itemGap === '8px', '菜单项图标间距 8px', box.itemGap)
+      const checks = await cdp.evaluate(`document.querySelectorAll('.dshsm-menu__check').length`)
+      check(checks === 1, '当前值那一项带对勾，且只有它带', String(checks))
+    }
+    await cdp.evaluate(`(() => { document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return true })()`)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+}
+
 async function auditStyles(cdp, { notes: remarks }) {
   const PROPS = {
     card: ['paddingTop', 'paddingRight', 'borderTopWidth', 'borderTopStyle', 'borderTopLeftRadius'],
@@ -376,6 +483,79 @@ async function auditStyles(cdp, { notes: remarks }) {
     })()`)
 
   await new Promise((resolve) => setTimeout(resolve, 400))
+
+  // 通用设置页里的「中文 / 浅色 / 紧凑」不是原生 select —— 它们是自绘控件。
+  // 把它的真实结构量出来，这才是 DSH 的下拉长什么样。
+  await go('通用设置')
+  await new Promise((resolve) => setTimeout(resolve, 800))
+  const dshControl = await cdp.evaluate(`(() => {
+    const all = Array.from(document.querySelectorAll('button, [role=combobox], [role=button], select, input'))
+    const pick = (text) => all.find((el) => (el.innerText || el.value || '').trim() === text)
+    const describe = (el) => {
+      if (!el) return null
+      const cs = getComputedStyle(el)
+      const r = el.getBoundingClientRect()
+      return {
+        tag: el.tagName, cls: el.className, role: el.getAttribute('role'),
+        box: Math.round(r.width) + 'x' + Math.round(r.height),
+        padding: cs.padding, font: cs.fontSize, radius: cs.borderRadius,
+        border: cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor,
+        background: cs.backgroundColor, color: cs.color,
+        html: el.outerHTML,
+      }
+    }
+    const zh = pick('中文')
+    return { 中文控件: describe(zh), 是原生select: document.querySelectorAll('select').length }
+  })()`)
+  console.log('通用设置的控件：' + JSON.stringify(dshControl, null, 2))
+
+  // 点开它，看弹出的列表长什么样
+  const opened = await cdp.evaluate(`(() => {
+    const el = Array.from(document.querySelectorAll('button, [role=combobox], [role=button]')).find((e) => (e.innerText || '').trim() === '中文')
+    if (!el) return 'not-found'
+    el.click()
+    return 'clicked'
+  })()`)
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  const popup = await cdp.evaluate(`(() => {
+    const roles = ['[role=listbox]', '[role=menu]', '[role=option]', '[data-radix-popper-content-wrapper]', '[data-state=open]']
+    const found = {}
+    for (const sel of roles) found[sel] = document.querySelectorAll(sel).length
+    const lb = document.querySelector('[role=listbox], [role=menu]')
+    let detail = null
+    if (lb) {
+      const cs = getComputedStyle(lb)
+      const r = lb.getBoundingClientRect()
+      detail = {
+        box: Math.round(r.width) + 'x' + Math.round(r.height),
+        background: cs.backgroundColor, radius: cs.borderRadius,
+        border: cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor,
+        padding: cs.padding, shadow: cs.boxShadow.slice(0, 80), cls: lb.className,
+        shadowFull: cs.boxShadow,
+        // 菜单项在 viewport 里面，再往下钻一层
+        items: Array.from(lb.querySelectorAll('[role=menuitem], [role=option], [data-value]')).slice(0, 3).map((c) => {
+          const ic = getComputedStyle(c)
+          const r = c.getBoundingClientRect()
+          return {
+            text: (c.innerText || '').trim().slice(0, 20),
+            cls: c.className,
+            box: Math.round(r.width) + 'x' + Math.round(r.height),
+            padding: ic.padding,
+            radius: ic.borderRadius,
+            color: ic.color,
+            background: ic.backgroundColor,
+            font: ic.fontSize,
+            html: c.outerHTML,
+          }
+        }),
+      }
+    }
+    return { found, detail }
+  })()`)
+  console.log('展开后：' + JSON.stringify({ opened, popup }, null, 2))
+  await cdp.evaluate(`(() => { document.body.click(); return true })()`)
+  await go('技能')
+  await new Promise((resolve) => setTimeout(resolve, 500))
 
   const ours = await readAll(0)
   const switched = await go('提示词')
@@ -747,6 +927,54 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500))
     await shoot(shotPath)
     // 再拍一张展开详情的：收起态看不出详情是不是真的长在卡片里。
+    // 再多拍一张下拉展开的：收起态看不出菜单层（20px 圆角 / 阴影 / 对勾）是不是照 DSH 做的。
+    //
+    // 候选目录来自会话列表，这个实例常常只有一个，而只有一个时界面不渲染下拉。
+    // 所以这里**临时给 /catalog 的响应注入几个候选**来取样 —— 只是取样手段，被测代码没被改。
+    await cdp.evaluate(`(() => {
+      const real = window.fetch
+      window.fetch = async (...args) => {
+        const res = await real(...args)
+        const url = String(args[0] && args[0].url ? args[0].url : args[0])
+        if (!url.includes('/dsh-skills-manager/catalog')) return res
+        const body = await res.clone().json()
+        // 第一项用**真实的 cwd**，否则 item === current 匹配不上，右侧那个对勾就不出现。
+        if (body && body.data) body.data.candidates = [body.data.cwd, 'F:/project/抖音', 'D:/Personal/Desktop/新建文件夹 (7)/CLIProxyAPI']
+        return new Response(JSON.stringify(body), { status: res.status, headers: { 'content-type': 'application/json' } })
+      }
+      return true
+    })()`)
+    // 切走再切回来，逼界面重新拉一次目录、按注入的候选重渲染。
+    // 这里不能用 auditStyles 里那个 `go` —— 它不在这个作用域。
+    const clickEntry = (label) =>
+      cdp.evaluate(`(() => {
+        const nodes = Array.from(document.querySelectorAll('button, [role=button], li, div'))
+        const target = nodes.find((el) => (el.innerText || '').trim() === ${JSON.stringify(label)})
+        if (!target) return false
+        target.click()
+        return true
+      })()`)
+    await clickEntry('通用设置')
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    await clickEntry('技能')
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    const triggerInfo = await cdp.evaluate(`(() => {
+      const el = document.querySelector('.dshsm-select__trigger')
+      if (!el) return { present: false }
+      el.click()
+      return { present: true, text: el.innerText.trim() }
+    })()`)
+    if (triggerInfo.present) {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      // 这里只截图。数值校验在 auditDropdown 里（`--styles` 时跑）——
+      // 同一件事放两个地方量，迟早会出现两个互相打架的真相。
+      await shoot(shotPath.replace(/\.png$/, '-menu.png'))
+      await cdp.evaluate(`(() => { document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return true })()`)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    } else {
+      console.log('     下拉选择器：没有渲染')
+    }
+
     if (panel.names.length > 0) {
       await cdp.evaluate(`(() => {
         const row = Array.from(document.querySelectorAll('.dshsm-row')).find((el) => el.querySelector('.dshsm-name')?.innerText.trim() === ${JSON.stringify(panel.names[0])})
@@ -833,6 +1061,8 @@ try {
   if (doStyleAudit) {
     console.log('\n和提示词页逐项对比计算样式（同一次会话、同一个主题）')
     await auditStyles(cdp, { notes })
+    console.log(String.fromCharCode(10) + '下拉控件：和通用设置页里 DSH 自己的选择器对比')
+    await auditDropdown(cdp, { notes })
   }
 
   console.log('\n看看有没有 JS 报错')

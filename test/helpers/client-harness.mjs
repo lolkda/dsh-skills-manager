@@ -19,7 +19,7 @@ const CLIENT_PATH = fileURLToPath(new URL('../../client/client.js', import.meta.
  * 造一个够用的 React 替身。
  *
  * 只实现这块界面用到的子集：函数组件、`createElement`、`useState` / `useEffect` /
- * `useCallback` / `useMemo`、以及一个 `Component` 基类（供错误边界继承）。
+ * `useCallback` / `useMemo` / `useRef`、以及一个 `Component` 基类（供错误边界继承）。
  * @param {object} runtime - 保存 hook 状态的运行时
  * @returns {object} React 替身
  */
@@ -33,6 +33,13 @@ function createReact(runtime) {
         slot.value = typeof initial === 'function' ? initial() : initial
       }
       return [slot.value, (next) => runtime.setState(slot, next)]
+    },
+    // 引用必须**跨渲染稳定**（真实 React 就是这样，组件靠它记住 DOM 节点）。
+    // 每次渲染新建一个 `{ current }` 的话，点外面关掉菜单那类逻辑会永远失效。
+    useRef: (initial) => {
+      const slot = runtime.slot()
+      if (!slot.ref) slot.ref = { current: initial }
+      return slot.ref
     },
     useEffect: (fn, deps) => {
       const slot = runtime.slot()
@@ -169,6 +176,16 @@ export function loadClient(options = {}) {
       return tag
     },
     head: { appendChild: () => {} },
+    // 下拉靠 document 上的监听来「点外面关掉」/ 按 Esc 关掉。这里只记下监听器，
+    // 测试想验证"关掉"这条路径时可以手动触发，不必真的去点。
+    listeners: {},
+    addEventListener(type, handler) {
+      this.listeners[type] = this.listeners[type] ?? []
+      this.listeners[type].push(handler)
+    },
+    removeEventListener(type, handler) {
+      this.listeners[type] = (this.listeners[type] ?? []).filter((item) => item !== handler)
+    },
   }
   const runtime = createRuntime()
   const React = createReact(runtime)
