@@ -42,6 +42,9 @@ function options() {
     profile: value('profile', 'skillprobe'),
     settleMs: Number(value('settle', '9000')),
     dump: value('dump', ''),
+    // bundled 根走环境变量（`dsh-skill-filesystem` 在没显式配 config 时读它），
+    // 所以要有办法把它只喂给这一场会话。
+    bundled: value('bundled', ''),
   }
 }
 
@@ -51,7 +54,7 @@ mkdirSync(join(dshHome, 'dsh-skills-manager'), { recursive: true })
 
 const child = spawn(process.execPath, [DSH_BIN, '--profile', opts.profile], {
   cwd: join(dshHome, 'profiles', opts.profile),
-  env: { ...process.env, DSH_HOME: dshHome },
+  env: { ...process.env, DSH_HOME: dshHome, ...(opts.bundled ? { DSH_BUNDLED_SKILL_DIR: opts.bundled } : {}) },
   stdio: ['pipe', 'pipe', 'pipe'],
 })
 

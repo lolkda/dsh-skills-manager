@@ -100,6 +100,23 @@ curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 
 活动日志里每个 agent 建立时会记一条 `scope-snapshot`，写明**那个会话**解析出的技能清单 —— 排查「为什么这个会话里没有它」看这里，而不是看插件自己的状态接口。
 
+### 与 DSH 实际解析的一致性核对
+
+`/registry` 的响应里有一个 `divergence` 字段：把**本插件自己算出的清单**与**注册表里 DSH 实际解析出的那一份**逐条比对（只取 `provider === "filesystem"` 的条目 —— 本插件的 overlay 也注册在同一个注册表里，算进来就成了自己跟自己比）。
+
+为什么需要它：本插件与 `dsh-skill-filesystem` **各有一份配置**（`customSkillDirs`、`bundledSkillDir`、`includeDefaultRoots`、`dshHome`、`agentsHome`），两边没有任何机制保证一致。分叉的后果是：
+
+- 我们多报 → 界面上有这条技能，模型从来收不到；
+- 我们少报 → 技能实际在生效，界面上看不见。
+
+**两种都不会报错**，只能主动比出来。界面上一致时显示「已与 DSH 实际解析核对：N 条一致」，不一致时分别点名「多报了哪些（模型收不到）」与「少报了哪些（界面看不到）」；没有可用会话视图时什么都不显示，不假装核对过。
+
+每个会话建立时，活动日志里的 `scope-snapshot` 也会带上这句结论：
+
+```
+agent session-... 的技能视图：共 9 条 —— apple-liquid-glass、grill-me（模型不可用）、...；与 DSH 实际解析一致（9 条）
+```
+
 ### `loadable` 的含义是「DSH 会不会真的加载它」
 
 DSH 用真正的 `yaml` 库解析 frontmatter，任何解析失败都会让**整条技能被丢弃**。本插件是手写的 YAML 子集，所以对这类写法一律**明确报错**，而不是"能读出来就算数"：

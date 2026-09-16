@@ -481,3 +481,70 @@ skills_list    skills_set_enabled          skills_update
 顺带记一条方法论：这轮的探针同时取**两份视图** ——
 `registry`（插件从注册表读到的）与 `prompt`（模型真正收到的系统提示）。
 只看前者，就是让被告自己作证；两者不一致，才说明插件在骗人。这轮的分歧正是这么发现的。
+
+## 18. customSkillDirs 与 bundled：目标列的六类根全部验证完，以及一个一致性检测器
+
+目标列了六类根。前几轮验证了四类（`$DSH_HOME/skills`、`~/.agents/skills`、项目
+`.dsh/skills` 与项目 `.agents/skills`），剩下 `customSkillDirs`（rank 300）与
+`bundled`（rank 600）在当前环境里**都是空的**：`customSkillDirs` 默认 `[]`，
+`bundledSkillDir` 来自 `DSH_BUNDLED_SKILL_DIR` 且未设置。所以要配出来才能验。
+
+### 先说一个结构性问题
+
+本插件与 `dsh-skill-filesystem` **各有一份配置**（同名选项：`customSkillDirs`、
+`bundledSkillDir`、`includeDefaultRoots`、`dshHome`、`agentsHome`），两边没有任何机制保证
+一致。一旦分叉：
+
+- 我们多报 → 界面上有这条技能，模型却从来收不到；
+- 我们少报 → 技能实际在生效，界面上却看不见。
+
+两种都不报错。所以加了 `lib/divergence.js`：把本插件算出的清单与**注册表里 DSH 实际解析
+出的那一份**逐条比对，只取 `provider === 'filesystem'` 的条目（本插件的 overlay 也注册在
+同一个注册表里，把它算进来就成了自己跟自己比）。结果写进每个会话的活动日志，也出现在
+界面上。
+
+### 让检测器响一次
+
+一个永远说"一致"的检测器比没有更糟。所以先故意造出分歧：只给本插件配 `customSkillDirs`，
+DSH 那边不动。
+
+```
+本插件多报了 1 条（DSH 里没有）：probe-custom
+```
+
+它响了，而且点的是名。
+
+### 两边都配上之后
+
+```
+会话技能视图：共 10 条 —— ... probe-custom ...；与 DSH 实际解析一致（10 条）
+模型收到的系统提示里出现 probe-custom：1 次
+```
+
+`customSkillDirs` 端到端打通：配上 → 本插件发现（rank 300）→ DSH 读取 → **送进模型** →
+两边一致。
+
+`bundled` 同理，走环境变量：
+
+```
+DSH_BUNDLED_SKILL_DIR=... 会话技能视图：共 10 条 —— ... bundled-skill ...；一致（10 条）
+模型收到的系统提示里出现 bundled-skill：1 次
+```
+
+（`spike/session-probe.mjs` 因此新增 `--bundled <目录>`，把环境变量只喂给这一场会话。）
+
+至此目标列的六类根**全部有真机证据**。
+
+### 界面
+
+面板现在同时拉 `/catalog` 与 `/registry`：
+
+- 一致 → 绿色提示「已与 DSH 实际解析核对：N 条一致」——一句**经过实测**的话，不是插件自称；
+- 不一致 → 红色提示，分别点名"多报了哪些（模型收不到）"与"少报了哪些（界面看不到）"；
+- 没有可用 agent 视图 → **什么都不说**，不假装核对过（`checked: false` 带原因）。
+
+真机上两条路径都验过：无 agent 时 `/registry` 返回
+`{"checked":false,"reason":"当前没有可用的 agent 视图，拿宿主层去比只会得到假差异"}`；
+有 agent 时报「与 DSH 实际解析一致（9 条）」。
+
+顺带修了一个防护缺失：目录里若出现 `null` 记录，比对会把 `/registry` 与活动日志一起打挂。

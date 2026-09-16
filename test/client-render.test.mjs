@@ -82,7 +82,10 @@ function catalog(overrides = {}) {
 const switchFor = (tree, name) => findAll(tree, (node) => typeof node.props?.className === 'string' && node.props.className.includes('dshsm-switch')).find((node) => String(node.props['aria-label']).includes(name))
 
 test('挂载时拉取目录，并把技能、来源与状态渲染出来', async () => {
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
+  const fetch = makeFetch({
+    '/dsh-skills-manager/catalog': catalog(),
+    '/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: true, ours: 2, registry: 2, missing: [], extra: [], consistent: true } } },
+  })
   const client = loadClient({ fetch })
   const tree = await client.mount()
 
@@ -236,4 +239,49 @@ test('有多个候选目录时给出选择器，切换后按新目录重新解�
   await client.update()
   const latest = fetch.calls.filter((call) => call.url.startsWith('/dsh-skills-manager/catalog')).pop()
   assert.match(latest.url, /beta/, '切换后要按新目录重新解析')
+})
+
+test('与 DSH 实际解析一致时给出经实测的确认', async () => {
+  // 一致的结论也要显示：那是一句经过实测的话，而不是插件的自称。这个面板最容易犯的错
+  // 就是"说技能在生效，而模型根本没收到"。
+  const fetch = makeFetch({
+    '/dsh-skills-manager/catalog': catalog(),
+    '/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: true, ours: 2, registry: 2, missing: [], extra: [], consistent: true } } },
+  })
+  const client = loadClient({ fetch })
+  const tree = await client.mount()
+  assert.match(textOf(tree), /已与 DSH 实际解析核对：2 条一致/)
+})
+
+test('核对出多报/少报时点名列出，而不是含糊其辞', async () => {
+  const fetch = makeFetch({
+    '/dsh-skills-manager/catalog': catalog(),
+    '/dsh-skills-manager/registry': {
+      ok: true,
+      data: { divergence: { checked: true, ours: 3, registry: 2, missing: ['ghost'], extra: ['invisible'], consistent: false } },
+    },
+  })
+  const client = loadClient({ fetch })
+  const tree = await client.mount()
+  const text = textOf(tree)
+  assert.match(text, /多报了 1 条（DSH 里没有，模型收不到）：ghost/)
+  assert.match(text, /少报了 1 条（DSH 里有，界面看不到）：invisible/)
+})
+
+test('读不到注册表时不编造一致结论', async () => {
+  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
+  const client = loadClient({ fetch })
+  const tree = await client.mount()
+  assert.equal(textOf(tree).includes('已与 DSH 实际解析核对'), false, '没核对过就不能说核对过')
+  assert.equal(textOf(tree).includes('本插件多报'), false)
+})
+
+test('没有可用 agent 视图时不假装核对过', async () => {
+  const fetch = makeFetch({
+    '/dsh-skills-manager/catalog': catalog(),
+    '/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: false, reason: '当前没有可用的 agent 视图' } } },
+  })
+  const client = loadClient({ fetch })
+  const tree = await client.mount()
+  assert.equal(textOf(tree).includes('核对'), false)
 })

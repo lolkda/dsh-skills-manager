@@ -419,6 +419,27 @@ window.__ModuleLoader__.load({
     }
 
     /** 主分区。 */
+    /**
+     * 把注册表核对结果渲染成一条提示。
+     *
+     * 一致的结论也要显示：那是一句**经过实测**的话，而不是插件的自称 —— 这个面板最容易犯的
+     * 错就是"说技能在生效，而模型根本没收到"。
+     * @param {object|null} divergence - `/registry` 返回的核对结果
+     * @returns {object|null} 节点
+     */
+    function divergenceNotice(divergence) {
+      if (!divergence || !divergence.checked) return null
+      const missing = divergence.missing ?? []
+      const extra = divergence.extra ?? []
+      if (missing.length === 0 && extra.length === 0) {
+        return h('div', { className: 'dshsm-notice dshsm-notice--ok' }, `已与 DSH 实际解析核对：${divergence.ours} 条一致`)
+      }
+      const parts = []
+      if (missing.length > 0) parts.push(`本插件多报了 ${missing.length} 条（DSH 里没有，模型收不到）：${missing.join('、')}`)
+      if (extra.length > 0) parts.push(`本插件少报了 ${extra.length} 条（DSH 里有，界面看不到）：${extra.join('、')}`)
+      return h('div', { className: 'dshsm-notice dshsm-notice--danger' }, parts.join('；'))
+    }
+
     function SkillsSection() {
       const [data, setData] = useState(null)
       const [error, setError] = useState(null)
@@ -429,6 +450,7 @@ window.__ModuleLoader__.load({
       const [mode, setMode] = useState(null)
       const [editor, setEditor] = useState(null)
       const [cwd, setCwd] = useState(null)
+      const [registry, setRegistry] = useState(null)
 
       /**
        * 重新拉取目录。
@@ -436,7 +458,13 @@ window.__ModuleLoader__.load({
        */
       const reload = useCallback(async () => {
         try {
-          const response = await request('/catalog')
+          // 同时拉注册表：本插件与 dsh-skill-filesystem 各有一份配置，两边没有任何机制保证
+          // 一致。多报会让用户以为技能在生效、少报会让技能隐形，两种都不报错 —— 只能主动比。
+          const [response, registry] = await Promise.all([
+            request('/catalog'),
+            request('/registry').catch(() => null),
+          ])
+          setRegistry(registry && registry.ok ? registry.data : null)
           if (!response.ok) {
             setError(response.error ?? '读取目录失败')
             return
@@ -548,6 +576,7 @@ window.__ModuleLoader__.load({
         ),
         error ? h('div', { className: 'dshsm-notice dshsm-notice--danger' }, error) : null,
         data && data.damaged ? h('div', { className: 'dshsm-notice dshsm-notice--warn' }, data.damaged) : null,
+        divergenceNotice(registry ? registry.divergence : null),
         tab === 'trash' ? h(TrashPanel, { items: data ? data.trash : [], onChanged: reload, onError: setError }) : null,
         tab === 'skills' && mode === 'create'
           ? h(CreateForm, {
@@ -798,6 +827,7 @@ window.__ModuleLoader__.load({
 .dshsm-kv dt { opacity:.6; }
 .dshsm-kv dd { margin:0; min-width:0; overflow-wrap:anywhere; }
 .dshsm-notice { border-radius:8px; padding:8px 10px; font-size:12px; background:rgba(127,127,127,.12); }
+.dshsm-notice--ok { background:rgba(46,160,67,.14); }
 .dshsm-notice--warn { background:rgba(230,170,40,.16); }
 .dshsm-notice--danger { background:rgba(230,80,80,.14); }
 .dshsm-list { margin:6px 0 0; padding-left:18px; }
