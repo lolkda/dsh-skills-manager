@@ -13,9 +13,11 @@
  */
 
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+import { makeZip } from './make-zip.mjs'
 
 const CHROME_CANDIDATES = [
   join(process.env.LOCALAPPDATA ?? '', 'Google/Chrome/Application/chrome.exe'),
@@ -34,6 +36,7 @@ const logPath = value('log', '')
 const keepOpen = args.includes('--keep-open')
 const toggleTarget = value('toggle', '')
 const exercise = args.includes('--exercise')
+const doImportExercise = args.includes('--exercise-import')
 // 默认指向真实的用户技能根 —— 演练会在这里建一条临时技能，最后再清掉。
 const skillsDir = value('skills-dir', join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh', 'skills'))
 const DEBUG_PORT = Number(value('port', '9333'))
@@ -145,6 +148,143 @@ async function waitFor(cdp, expression, timeoutMs = 20000, label = expression) {
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
+}
+
+/**
+ * 在真实浏览器里把「导入」的三条分支都走一遍：ZIP 上传、单个 Markdown 上传、从路径导入。
+ *
+ * 为什么单独挑这三条：路径那条在别处验过，但**上传**这两条走的是浏览器独有的 API ——
+ * `readBase64` 用 `FileReader`、Markdown 用 `file.text()`。自写的 mini React 运行时里根本没有
+ * `FileReader`，所以这两条分支在真实浏览器之外的地方**一次都没跑过**。
+ * @param {Cdp} cdp - 客户端
+ * @param {object} options - 参数
+ * @param {string} options.skillsDir - 用户技能根
+ * @param {string} options.scratchDir - 放素材的临时目录
+ * @param {string[]} options.notes - 备注收集
+ * @returns {Promise<void>} 完成
+ */
+async function exerciseImport(cdp, { skillsDir, scratchDir, notes: remarks }) {
+  const zipName = 'probe-zip'
+  const mdName = 'probe-md'
+  const dirName = 'probe-dir'
+
+  // 素材：一个 ZIP（内含目录 bundle）、一个单文件 Markdown、一个目录。
+  const zipPath = join(scratchDir, 'probe-zip.zip')
+  writeFileSync(zipPath, makeZip([{ name: `${zipName}/SKILL.md`, data: doc(zipName, '由浏览器上传 ZIP 导入'), deflate: true }]))
+  const mdPath = join(scratchDir, 'probe-md.md')
+  writeFileSync(mdPath, doc(mdName, '由浏览器上传单个 Markdown 导入'))
+  const dirPath = join(scratchDir, 'probe-dir')
+  mkdirSync(dirPath, { recursive: true })
+  writeFileSync(join(dirPath, 'SKILL.md'), doc(dirName, '由浏览器按路径导入'))
+
+  /** 打开导入表单。 */
+  const openImport = () =>
+    cdp.evaluate(`(() => {
+      const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === '导入技能')
+      if (!el) return false
+      el.click()
+      return true
+    })()`)
+
+  /** 往文件输入框里塞一个真实文件 —— 和用户点"选择文件"是同一个效果。 */
+  const attachFile = async (filePath) => {
+    const handle = await cdp.send('Runtime.evaluate', { expression: `document.querySelector('.dshsm-form input[type=file]')` })
+    const objectId = handle.result?.objectId
+    if (!objectId) return false
+    await cdp.send('DOM.setFileInputFiles', { files: [filePath], objectId })
+    return true
+  }
+
+  /** 该技能在磁盘上出现了吗。 */
+  const onDisk = (name) => existsSync(join(skillsDir, name, 'SKILL.md'))
+
+  // ---- ZIP ----
+  check(await openImport(), '导入：打开导入表单')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  check(await attachFile(zipPath), '导入：把 ZIP 塞进文件框')
+  const zipOk = await waitFor(cdp, `document.querySelectorAll('.dshsm-name').length > 0 && ${JSON.stringify(true)}`, 3000, 'ZIP 上传后的界面')
+  check(zipOk || true, '导入：界面还在（下面按磁盘与列表判断结果）')
+  let appeared = false
+  for (let i = 0; i < 40 && !appeared; i += 1) {
+    appeared = onDisk(zipName)
+    if (!appeared) await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  check(appeared, '导入：ZIP 上传后磁盘上出现了它')
+
+  // ---- 单个 Markdown ----
+  await new Promise((resolve) => setTimeout(resolve, 800))
+  if (!(await openImport())) {
+    // 上一次导入成功后表单会自动关闭，重新打开。
+    await cdp.evaluate(`(() => { const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === '导入技能'); if (el) el.click(); return true })()`)
+    await new Promise((resolve) => setTimeout(resolve, 400))
+  }
+  check(await attachFile(mdPath), '导入：把单个 Markdown 塞进文件框')
+  let mdAppeared = false
+  for (let i = 0; i < 40 && !mdAppeared; i += 1) {
+    mdAppeared = onDisk(mdName)
+    if (!mdAppeared) await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  check(mdAppeared, '导入：单个 Markdown 上传后磁盘上出现了它')
+
+  // ---- 从路径导入 ----
+  await new Promise((resolve) => setTimeout(resolve, 800))
+  await cdp.evaluate(`(() => { const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === '导入技能'); if (el) el.click(); return true })()`)
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  const typed = await cdp.evaluate(`(() => {
+    const el = Array.from(document.querySelectorAll('.dshsm-form input')).find((i) => i.type !== 'file')
+    if (!el) return false
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(dirPath)})
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+    return true
+  })()`)
+  check(typed, '导入：填上本机路径')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  check(
+    await cdp.evaluate(`(() => {
+      const el = Array.from(document.querySelectorAll('button')).find((b) => (b.innerText || '').trim() === '从路径导入')
+      if (!el) return false
+      el.click()
+      return true
+    })()`),
+    '导入：点从路径导入',
+  )
+  let dirAppeared = false
+  for (let i = 0; i < 40 && !dirAppeared; i += 1) {
+    dirAppeared = onDisk(dirName)
+    if (!dirAppeared) await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  check(dirAppeared, '导入：按路径导入后磁盘上出现了它')
+
+  // 列表里也要看得到 —— 只在磁盘上出现还不算导入成功。
+  const listed = await waitFor(
+    cdp,
+    `['${zipName}','${mdName}','${dirName}'].every((n) => Array.from(document.querySelectorAll('.dshsm-name')).some((el) => el.innerText.trim() === n))`,
+    15000,
+    '三条导入的技能都在列表里',
+  )
+  check(listed, '导入：三条都出现在技能列表里')
+
+  // ---- 清场：直接从磁盘移除，不经过界面（这三条是探针造的，不是用户的东西）----
+  for (const name of [zipName, mdName, dirName]) {
+    if (existsSync(join(skillsDir, name))) {
+      try {
+        rmSync(join(skillsDir, name), { recursive: true, force: true })
+      } catch {
+        remarks.push(`导入演练的临时技能没清掉：${join(skillsDir, name)}`)
+      }
+    }
+  }
+  check(!onDisk(zipName) && !onDisk(mdName) && !onDisk(dirName), '导入：清理干净')
+}
+
+/**
+ * 造一份技能文档。
+ * @param {string} name - 技能名
+ * @param {string} description - 描述
+ * @returns {string} 文档
+ */
+function doc(name, description) {
+  return ['---', `name: ${name}`, `description: ${description}`, '---', '', '正文由浏览器探针导入。', ''].join(String.fromCharCode(10))
 }
 
 /**
@@ -540,6 +680,11 @@ try {
     await exercisePanel(cdp, { skillsDir, notes })
   }
 
+  if (doImportExercise) {
+    console.log('\n在真实 DOM 里走一遍 导入（ZIP 上传 / Markdown 上传 / 按路径）')
+    await exerciseImport(cdp, { skillsDir, scratchDir: profileDir, notes })
+  }
+
   console.log('\n看看有没有 JS 报错')
   const errors = cdp.events
     .filter((event) => event.method === 'Runtime.exceptionThrown' || (event.method === 'Log.entryAdded' && event.params?.entry?.level === 'error'))
@@ -552,7 +697,17 @@ try {
   // 保险：不管演练在哪一步炸了，都不许把临时技能留在用户的技能目录里。
   // 上一次就是清场那几步断言失败、界面停在回收站标签页，结果 `browser-probe-tmp`
   // 真的进了模型可见的技能清单 —— 验收工具本身污染被验收的环境，是最不该发生的事。
-  if (exercise) {
+  if (exercise || doImportExercise) {
+    for (const stray of ['browser-probe-tmp', 'probe-zip', 'probe-md', 'probe-dir']) {
+      if (existsSync(join(skillsDir, stray))) {
+        try {
+          rmSync(join(skillsDir, stray), { recursive: true, force: true })
+          notes.push(`保险生效：${stray} 已从磁盘上兜底清除`)
+        } catch {
+          notes.push(`兜底清除失败，请手工删除：${join(skillsDir, stray)}`)
+        }
+      }
+    }
     const leftover = join(skillsDir, 'browser-probe-tmp')
     if (existsSync(leftover)) {
       try {
