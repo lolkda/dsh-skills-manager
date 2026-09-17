@@ -54,14 +54,17 @@ test('少报也要点名 —— 技能在生效而界面看不到', () => {
   assert.match(describeDivergence(result), /少报了 1 条.*invisible/)
 })
 
-test('只认文件系统提供方 —— 本插件自己的 overlay 不能算进去', () => {
-  // 拿自己跟自己比，结论永远是"一致"，那这个检测器就白写了。
+test('比对的是合并后的结果：别的提供方供给的技能也算「收得到」', () => {
+  // 这条测试原本写的是「只认文件系统提供方 —— 本插件自己的 overlay 不能算进去」，
+  // 理由是"拿自己跟自己比，结论永远是一致"。那个理由站不住：注册表是**合并后**的视图，
+  // 一条技能由谁供给并不改变它到没到模型手里。真机上正是这个过滤造出了 7 条假差异。
   const result = compareWithRegistry(
-    { skills: [ours('a')] },
-    [theirs('a'), theirs('a', 'dsh-skills-manager'), theirs('preset-only', 'some-preset')],
+    { skills: [ours('a'), ours('b')] },
+    [theirs('a'), theirs('b', 'some-preset')],
   )
-  assert.equal(result.consistent, true, 'overlay 与其它提供方都不参与比对')
-  assert.equal(result.registry, 1)
+  assert.equal(result.consistent, true, '别的提供方供给的同样是「模型收得到」')
+  assert.equal(result.registry, 2)
+  assert.equal(result.overlaid, 0, '不是本插件接管的，就不算接管数')
 })
 
 test('被遮蔽的与加载不上的纪录不参与比对', () => {
@@ -86,4 +89,20 @@ test('多报与少报同时存在时两句话都要说', () => {
   const text = describeDivergence(result)
   assert.match(text, /多报了 1 条.*ghost/)
   assert.match(text, /少报了 1 条.*invisible/)
+})
+
+test('被覆盖层接管的技能不算多报 —— 换了胜出者，技能本身还在', () => {
+  // 真机上踩到的：用户手动启用了 7 条技能，它们在注册表里的胜出者变成了我们自己的覆盖层
+  // （rank 0 胜过 preset 层的 400）。旧实现「只认 filesystem」，于是这 7 条全被丢出
+  // "注册表一侧"，界面报出「本插件多报了 7 条（DSH 没有，模型收不到）」——
+  // 而模型其实一条不少地收到了。这种误报会让整个提示失去可信度，比不提示更糟。
+  const result = compareWithRegistry(
+    { skills: [ours('a'), ours('b')] },
+    [theirs('a'), theirs('b', 'dsh-skills-manager')],
+  )
+  assert.equal(result.consistent, true, '覆盖层接管的技能仍在注册表里，不能算多报')
+  assert.deepEqual(result.missing, [])
+  assert.equal(result.registry, 2, '注册表一侧应当是合并之后的真实结果')
+  assert.equal(result.overlaid, 1, '顺带说清有多少条由本插件接管')
+  assert.match(describeDivergence(result), /其中 1 条由本插件的覆盖层接管/)
 })
