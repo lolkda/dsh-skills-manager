@@ -99,7 +99,13 @@ test('挂载时拉取目录，并把技能、来源与状态渲染出来', async
   assert.match(text, /dropped/)
   assert.match(text, /保留的技能/, '描述必须出现')
   assert.match(text, /user-dsh/, '来源徽标必须出现')
-  assert.match(text, /手动停用/, '被覆盖过的技能要标出来')
+  // 「手动启用 / 手动停用」徽标已按用户要求去掉。状态本身仍然看得见：它由开关承载，
+  // 而「这条是手动启停的」退到开关的 tooltip 上 —— 所以这里两个方向都钉住。
+  assert.doesNotMatch(text, /手动启用|手动停用/, '行内不再有手动启停徽标')
+  const dropped = switchFor(tree, 'dropped')
+  assert.ok(dropped, '应当找到 dropped 的开关')
+  assert.equal(dropped.props['aria-checked'], 'false', '停用状态由开关本身表达')
+  assert.match(String(dropped.props.title), /手动启停/, '覆盖信息退到开关的 tooltip')
 })
 
 test('点击开关发出精确的策略请求，并重新拉取目录', async () => {

@@ -121,7 +121,8 @@ window.__ModuleLoader__.load({
             h(Pill, { tone: skill.winner ? 'source' : 'muted' }, skill.source),
             skill.shadowed ? h(Pill, { tone: 'muted' }, `被 ${skill.source} 遮蔽`) : null,
             !skill.loadable ? h(Pill, { tone: 'danger' }, '不可加载') : null,
-            overridden ? h(Pill, { tone: 'warn' }, skill.override ? '手动启用' : '手动停用') : null,
+            // 这里曾有「手动启用 / 手动停用」徽标，已按用户要求去掉：开关本身就在表达状态，
+            // 每行再挂一个徽标只是噪音。覆盖信息不丢 —— 它在详情面板里，以及开关的 tooltip 上。
             skill.overrideShadowed ? h(Pill, { tone: 'danger' }, '启停未生效') : null,
           ),
           h('div', { className: 'dshsm-row__desc' }, skill.description || h('em', null, '（没有 description）')),
@@ -494,7 +495,10 @@ window.__ModuleLoader__.load({
       const missing = divergence.missing ?? []
       const extra = divergence.extra ?? []
       if (missing.length === 0 && extra.length === 0) {
-        return h('div', { className: 'dshsm-notice dshsm-notice--ok' }, `已与 DSH 实际解析核对：${divergence.ours} 条一致`)
+        // 「接管」这句要说出来：注册表里那几条的提供方是本插件而不是文件系统提供方，
+        // 不说清楚会让人以为核对漏了它们。它不影响结论，但影响这句话可不可信。
+        const overlaid = divergence.overlaid > 0 ? `，其中 ${divergence.overlaid} 条由本插件的覆盖层接管` : ''
+        return h('div', { className: 'dshsm-notice dshsm-notice--ok' }, `已与 DSH 实际解析核对：${divergence.ours} 条一致${overlaid}`)
       }
       const parts = []
       if (missing.length > 0) parts.push(`本插件多报了 ${missing.length} 条（DSH 里没有，模型收不到）：${missing.join('、')}`)
@@ -884,7 +888,6 @@ window.__ModuleLoader__.load({
 
 /* 小徽章，与提示词页的 badge 一致 */
 .dshsm-pill{flex:0 0 auto;padding:1px 6px;border:.5px solid var(--dsw-alias-border-l3);border-radius:4px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
-.dshsm-pill--warn{border-style:dashed;color:var(--dsw-alias-state-warn-primary)}
 .dshsm-pill--danger{border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
 .dshsm-pill--source{font-family:var(--ds-font-family-code,ui-monospace,monospace)}
 .dshsm-pill--off{color:var(--dsw-alias-label-quaternary)}
