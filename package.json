@@ -1,7 +1,7 @@
 {
   "name": "@lolkda/dsh-skills-manager",
   "version": "0.1.0",
-  "description": "Manage the DeepSeek Harness skill catalog from Settings: list what DSH actually resolves, enable or disable a skill by policy without touching its source file, read and edit SKILL.md, create and import skills, and recover deletions from a trash.",
+  "description": "Manage the DeepSeek Harness skill catalog from Settings: list what DSH actually resolves, enable or disable a skill by policy without touching its source file, read and edit SKILL.md, and create, import, or permanently delete skills.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

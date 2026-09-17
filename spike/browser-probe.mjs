@@ -1049,7 +1049,7 @@ try {
   }
 
   if (exercise) {
-    console.log('\n在真实 DOM 里走一遍 新建 → 编辑 → 删除 → 恢复 → 永久删除')
+    console.log('\n在真实 DOM 里走一遍 新建 → 编辑 → 删除（永久删除，带二次确认）')
     await exercisePanel(cdp, { skillsDir, notes })
   }
 

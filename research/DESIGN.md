@@ -73,7 +73,7 @@ ctx.on('skills/change', ...)
 
 同时该探针给出基线事实：**宿主层单独看只有 5 个 skill**（`grill-me`、`grilling`、`python-typed-development-skills`… 全为 `user-dsh` / `user-agents`）。
 
-### 2.7 一个未解释的现象（待验证）
+### 2.7 一个曾未解释的现象（结论见 §4.1）
 
 已装的 michengai 插件在 `~/.dsh/skills-manager/state.json` 里记了 `grill-me` 启用、`test-driven-development` 停用，其 `<你的实例>/dsh-skills-manager/state` 也自报 `test-driven-development` 的 `effectiveModelInvocable=false`；但本机活动会话的技能目录里**仍列出 `test-driven-development`**，而 `grill-me`（源文件自带 `disable-model-invocation: true`）**确实被翻成了可见**。
 
@@ -131,7 +131,7 @@ spike/           一次性机制探针
 1. 列表 + 启停（不改源文件）
 2. 正文查看与编辑
 3. 新建 / 导入（ZIP、文件夹、单个 `SKILL.md`）
-4. 删除 + 回收站 + 恢复
+4. 删除（**永久删除，没有回收站** —— 回收站与恢复后来按用户要求整个拿掉）
 5. Agent 侧工具（skills CRUD）
 
 ### 3.6 验收标准
@@ -173,7 +173,7 @@ DSH 的客户端模块表里**没有** `@deepseek-ai/dsh-client-ui-primitives`�
 ### 4.4 测试现状
 
 ```
-node --test  →  58 tests, 58 pass, 0 fail
+node --test  →  126 tests, 126 pass, 0 fail（2026-09-17 实测）
 ```
 
-覆盖：frontmatter 解析与校验、根目录与扫描、目录聚合与遮蔽、状态存储、ZIP 与 zip-slip、写操作与回收站、插件级端到端（真实注册表 + 真实文件系统）、真实注册表集成、分层遮蔽、客户端 bundle 契约。
+覆盖：frontmatter 解析与校验、根目录与扫描、目录聚合与遮蔽、状态存储、ZIP 与 zip-slip、写操作与永久删除、插件级端到端（真实注册表 + 真实文件系统）、真实注册表集成、分层遮蔽、客户端 bundle 契约。

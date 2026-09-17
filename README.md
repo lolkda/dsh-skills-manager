@@ -187,7 +187,7 @@ node scripts/migrate-external-skills.mjs             # 默认不覆盖同名技�
 零构建步骤：宿主半边是手写 ESM JS，浏览器半边是客户端模块系统的手写懒 CJS 工厂，因此不存在「改了源码忘了构建」这一类失败模式。
 
 ```powershell
-node --test                      # 62 个测试：单元 + 真实注册表集成 + 分层遮蔽 + 客户端契约
+node --test                      # 全部测试：单元 + 真实注册表集成 + 分层遮蔽 + 客户端契约
 node spike/registry-probe.mjs    # 一次性机制探针：打印三个场景下的胜出者
 ```
 
