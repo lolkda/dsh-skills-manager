@@ -263,7 +263,7 @@ export function loadClient(options = {}) {
   }
   /** 渲染一次并跑掉本次产生的副作用（同步部分）。 */
   const render = () => {
-    const tree = walk(runtime, registered[0].render(), 'root')
+    const tree = walk(runtime, registered[0].render(options.slotProps ?? {}), 'root')
     for (const fn of runtime.takeEffects()) fn()
     return tree
   }

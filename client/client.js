@@ -46,9 +46,14 @@ window.__ModuleLoader__.load({
      * @type {string|null}
      */
     let pinnedCwd = null
+    /** cwd 可能被多个会话共享；核对时还必须带上主视图的会话身份。 */
+    let pinnedSessionId = null
 
     async function request(path, body) {
-      const query = pinnedCwd ? `${path.includes('?') ? '&' : '?'}cwd=${encodeURIComponent(pinnedCwd)}` : ''
+      const params = []
+      if (pinnedCwd) params.push(`cwd=${encodeURIComponent(pinnedCwd)}`)
+      if (pinnedSessionId) params.push(`sessionId=${encodeURIComponent(pinnedSessionId)}`)
+      const query = params.length > 0 ? `${path.includes('?') ? '&' : '?'}${params.join('&')}` : ''
       const response = await fetch(`${ROUTE}${path}${query}`, {
         method: body === undefined ? 'GET' : 'POST',
         headers: body === undefined ? undefined : { 'content-type': 'application/json' },
@@ -517,7 +522,16 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dshsm-notice dshsm-notice--danger' }, parts.join('；'))
     }
 
-    function SkillsSection() {
+    /** settings.section 属于根作用域；与 DSH 自己的设置页一样，从 mainView 保留关系取当前会话。 */
+    function SessionSkillsSection(props) {
+      const session = props.useSessions((state) => {
+        const selected = Object.values(state.byId ?? {}).filter(item => (item.retainedBy?.mainView ?? 0) > 0)
+        return selected.length === 1 ? selected[0] : null
+      })
+      return h(SkillsSection, { sessionId: session?.id ?? null, sessionCwd: session?.cwd ?? null, sessionContext: true })
+    }
+
+    function SkillsSection({ sessionId = null, sessionCwd = null, sessionContext = false } = {}) {
       const [data, setData] = useState(null)
       const [error, setError] = useState(null)
       const [filter, setFilter] = useState('all')
@@ -536,15 +550,16 @@ window.__ModuleLoader__.load({
       const reload = useCallback(async () => {
         const generation = ++loadGeneration.current
         const requestedCwd = pinnedCwd
+        const requestedSessionId = pinnedSessionId
         try {
-          // 同时拉注册表：本插件与 dsh-skill-filesystem 各有一份配置，两边没有任何机制保证
-          // 一致。多报会让用户以为技能在生效、少报会让技能隐形，两种都不报错 —— 只能主动比。
+          // 同时核对当前会话；没有选中会话时只读磁盘目录，不借用历史会话推断模型可用性。
           const [response, registry] = await Promise.all([
             request('/catalog'),
-            request('/registry').catch(() => null),
+            sessionContext && !sessionId ? null : request('/registry').catch(() => null),
           ])
-          if (generation !== loadGeneration.current || requestedCwd !== pinnedCwd) return
-          setRegistry(registry && registry.ok ? registry.data : null)
+          if (generation !== loadGeneration.current || requestedCwd !== pinnedCwd || requestedSessionId !== pinnedSessionId) return
+          // 旧版后端可能忽略 sessionId；即使返回了核对结果，也不能把另一个会话冒充当前会话。
+          setRegistry(registry && registry.ok && (!requestedSessionId || registry.data?.agentId === requestedSessionId) ? registry.data : null)
           if (!response.ok) {
             setError(response.error ?? '读取目录失败')
             return
@@ -555,15 +570,32 @@ window.__ModuleLoader__.load({
           setCwd(pinnedCwd)
           setError(null)
         } catch (failure) {
-          if (generation === loadGeneration.current && requestedCwd === pinnedCwd) {
+          if (generation === loadGeneration.current && requestedCwd === pinnedCwd && requestedSessionId === pinnedSessionId) {
             setError(String(failure && failure.message ? failure.message : failure))
           }
         }
-      }, [])
+      }, [sessionContext, sessionId])
 
       useEffect(() => {
+        if (sessionContext) {
+          pinnedSessionId = sessionId
+          pinnedCwd = sessionCwd
+          editorGeneration.current += 1
+          setData(null)
+          setRegistry(null)
+          setCwd(sessionCwd)
+          setFilter('all')
+          setSelected(null)
+          setEditor(null)
+          setMode(null)
+          setError(null)
+        }
         reload()
-      }, [reload])
+        return () => {
+          loadGeneration.current += 1
+          editorGeneration.current += 1
+        }
+      }, [reload, sessionContext, sessionId, sessionCwd])
 
       /**
        * 换一个项目目录，重新解析所有根目录。
@@ -847,7 +879,9 @@ window.__ModuleLoader__.load({
             label: () => '技能',
             inject: () => ({}),
           },
-          () => h(Boundary, null, h(SkillsSection, null)),
+          (props) => h(Boundary, null, typeof props?.useSessions === 'function'
+            ? h(SessionSkillsSection, props)
+            : h(SkillsSection, null)),
         ),
       )
     }

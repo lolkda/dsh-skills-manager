@@ -1,6 +1,6 @@
 {
   "name": "@lolkda/dsh-skills-manager",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Manage the DeepSeek Harness skill catalog from Settings: list what DSH actually resolves, enable or disable a skill by policy without touching its source file, read and edit SKILL.md, and create, import, or permanently delete skills.",
   "repository": { "type": "git", "url": "git+https://github.com/lolkda/dsh-skills-manager.git" },
   "homepage": "https://github.com/lolkda/dsh-skills-manager#readme",
@@ -18,6 +18,7 @@
     "scripts",
     "cordis.patch.yml",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

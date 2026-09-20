@@ -54,6 +54,20 @@ dsh --profile web --dump-config   # 确认配置里出现 dsh-skills-manager
 dsh plugin --profile web add link:F:/project/dsh-skills-manager
 ```
 
+### 标准 npm 安装包
+
+源码可直接使用 `npm pack` 生成标准 npm tarball，不需要额外编译。安装包包含宿主 ESM 入口、浏览器客户端入口、DSH bundle patch、依赖声明、许可证和版本记录，不包含测试、审计日志或本地依赖。
+
+```bash
+npm pack
+# 普通 npm 项目安装：
+npm install /absolute/path/lolkda-dsh-skills-manager-0.2.1.tgz
+# DSH Web profile 安装：
+dsh plugin --profile web add /absolute/path/lolkda-dsh-skills-manager-0.2.1.tgz
+```
+
+替换已安装版本后需要**重启 DSH 宿主，再刷新原 GUI**；只刷新页面不会替换已加载的 ESM 后端。打包不会自动发布到 npm，`@latest` 指向的仍是注册表已经发布的版本。改动与已知测试限制见 [CHANGELOG](https://github.com/lolkda/dsh-skills-manager/blob/master/CHANGELOG.md)。
+
 ## 配置
 
 在 profile 自己的 `cordis.patch.yml` 里用 id 定向 patch 覆盖（该层在每个 bundle 层之后应用）：
@@ -102,7 +116,9 @@ curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 
 ### 与 DSH 实际解析的一致性核对
 
-`/registry` 的 `divergence` 只对**与所选 cwd 匹配且观测完整的 agent 视图**进行核对。它比较注册表合并后所有提供方的名称、可观测调用策略和来源；合法 overlay 接管不算缺失或来源冲突。没有匹配会话、cwd 未知或观测不完整时返回 `checked:false`，不借用其它项目冒充当前项目。
+`/registry?sessionId=<当前会话ID>&cwd=<所选目录>` 的 `divergence` 只对**指定会话、与所选 cwd 匹配且观测完整的 agent 视图**进行核对。它比较注册表合并后所有提供方的名称、可观测调用策略和来源；合法 overlay 接管不算缺失或来源冲突。没有匹配会话、cwd 未知或观测不完整时返回 `checked:false`，不借用其它会话冒充当前会话。
+
+**技能是否由本插件添加，不是核对依据。** 同一个 cwd 可能对应多个会话，旧会话的技能视图可能为空；仅挑第一个同目录会话会把原生文件系统技能误报成「模型收不到」。设置页通过 DSH 的 `useSessions` / `retainedBy.mainView` 获取主视图选中的会话，传递其 ID 和 cwd，并在切换会话后丢弃旧响应。收到其它会话的响应（例如旧版后端忽略了 `sessionId`）时不显示核对结论。旧客户端未传 `sessionId` 时，后端仅在所选目录恰好有一个会话时核对；有多个会话则明确返回未核对。
 
 为什么需要它：本插件与 `dsh-skill-filesystem` **各有一份配置**（`customSkillDirs`、`bundledSkillDir`、`includeDefaultRoots`、`dshHome`、`agentsHome`），两边没有任何机制保证一致。分叉的后果是：
 
@@ -124,7 +140,7 @@ agent session-... 的技能视图：共 9 条 —— apple-liquid-glass、grill-
 消费者消失 —— 界面看不出来，注册表也不报错，只是那条信息没了。现在原样带过来，`test/layers.test.mjs`
 里有一条守门测试（去掉转发即失败）。
 
-本插件保留技能原有的 `metadata` 对象，不往其中添加自己的标记。该对象通过显式声明的 `yaml` 依赖读取；真实注册表 `get()` 的前后对照见 [backend-p2.test.mjs](F:/project/dsh-skills-manager/test/backend-p2.test.mjs)。这不等于全部 frontmatter 语义已与原生一致：用户明确暂缓的 R21（缩进分隔符导致正文变化）仍保留，详见 [修复范围与暂缓记录](F:/project/dsh-skills-manager/docs/bugfix-plan.md)。策略覆盖状态由 `/catalog` 返回的 `overrides` 给出。
+本插件保留技能原有的 `metadata` 对象，不往其中添加自己的标记。该对象通过显式声明的 `yaml` 依赖读取；真实注册表 `get()` 的前后对照见 [backend-p2.test.mjs](https://github.com/lolkda/dsh-skills-manager/blob/master/test/backend-p2.test.mjs)。这不等于全部 frontmatter 语义已与原生一致：用户明确暂缓的 R21（缩进分隔符导致正文变化）仍保留，详见 [修复范围与暂缓记录](https://github.com/lolkda/dsh-skills-manager/blob/master/docs/bugfix-plan.md)。策略覆盖状态由 `/catalog` 返回的 `overrides` 给出。
 
 ### Agent 工具的参数表只用 DSH 支持的 JSON Schema 子集
 
