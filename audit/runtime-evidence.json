@@ -1,0 +1,189 @@
+{
+  "capturedAt": "2026-09-19T20:36:15.268Z",
+  "base": "http://127.0.0.1:3080",
+  "requestedCwd": "F:\\project\\dsh-model",
+  "auth": {
+    "/": {
+      "status": 401
+    },
+    "/api": {
+      "status": 401
+    }
+  },
+  "catalog": {
+    "status": 200,
+    "cwd": "F:\\project\\dsh-model",
+    "roots": [
+      {
+        "key": "project-dsh@f:/project/dsh-model",
+        "source": "project-dsh",
+        "path": "F:\\project\\dsh-model\\.dsh\\skills",
+        "exists": false,
+        "count": 0
+      },
+      {
+        "key": "project-agents@f:/project/dsh-model",
+        "source": "project-agents",
+        "path": "F:\\project\\dsh-model\\.agents\\skills",
+        "exists": false,
+        "count": 0
+      },
+      {
+        "key": "dsh",
+        "source": "user-dsh",
+        "path": "C:\\Users\\Administrator\\.dsh\\skills",
+        "exists": true,
+        "count": 6
+      },
+      {
+        "key": "agents",
+        "source": "user-agents",
+        "path": "C:\\Users\\Administrator\\.agents\\skills",
+        "exists": true,
+        "count": 1
+      }
+    ],
+    "skills": [
+      {
+        "name": "apple-liquid-glass",
+        "rootKey": "dsh",
+        "source": "user-dsh",
+        "enabled": true,
+        "winner": true,
+        "loadable": true
+      },
+      {
+        "name": "frontend-ui-system",
+        "rootKey": "dsh",
+        "source": "user-dsh",
+        "enabled": false,
+        "winner": true,
+        "loadable": true
+      },
+      {
+        "name": "improve-codebase-architecture",
+        "rootKey": "dsh",
+        "source": "user-dsh",
+        "enabled": true,
+        "winner": true,
+        "loadable": true
+      },
+      {
+        "name": "python-typed-development-standards",
+        "rootKey": "dsh",
+        "source": "user-dsh",
+        "enabled": true,
+        "winner": true,
+        "loadable": true
+      },
+      {
+        "name": "refactor",
+        "rootKey": "agents",
+        "source": "user-agents",
+        "enabled": true,
+        "winner": true,
+        "loadable": true
+      },
+      {
+        "name": "reverse-flow",
+        "rootKey": "dsh",
+        "source": "user-dsh",
+        "enabled": true,
+        "winner": true,
+        "loadable": true
+      },
+      {
+        "name": "test-driven-development",
+        "rootKey": "dsh",
+        "source": "user-dsh",
+        "enabled": true,
+        "winner": true,
+        "loadable": true
+      }
+    ]
+  },
+  "registry": {
+    "status": 200,
+    "scope": "agent",
+    "complete": true,
+    "skills": [
+      {
+        "name": "apple-liquid-glass",
+        "source": "user-dsh",
+        "provider": "dsh-skills-manager",
+        "modelInvocable": true,
+        "userInvocable": true
+      },
+      {
+        "name": "cordis-plugin-development",
+        "source": "custom",
+        "provider": "filesystem",
+        "modelInvocable": true,
+        "userInvocable": true
+      },
+      {
+        "name": "editing-cordis-compositions",
+        "source": "custom",
+        "provider": "filesystem",
+        "modelInvocable": true,
+        "userInvocable": true
+      },
+      {
+        "name": "frontend-ui-system",
+        "source": "user-dsh",
+        "provider": "dsh-skills-manager",
+        "modelInvocable": false,
+        "userInvocable": false
+      },
+      {
+        "name": "improve-codebase-architecture",
+        "source": "user-dsh",
+        "provider": "dsh-skills-manager",
+        "modelInvocable": true,
+        "userInvocable": true
+      },
+      {
+        "name": "python-typed-development-standards",
+        "source": "user-dsh",
+        "provider": "dsh-skills-manager",
+        "modelInvocable": true,
+        "userInvocable": true
+      },
+      {
+        "name": "refactor",
+        "source": "user-agents",
+        "provider": "dsh-skills-manager",
+        "modelInvocable": true,
+        "userInvocable": true
+      },
+      {
+        "name": "reverse-flow",
+        "source": "user-dsh",
+        "provider": "dsh-skills-manager",
+        "modelInvocable": true,
+        "userInvocable": true
+      },
+      {
+        "name": "test-driven-development",
+        "source": "user-dsh",
+        "provider": "dsh-skills-manager",
+        "modelInvocable": true,
+        "userInvocable": true
+      }
+    ],
+    "divergence": {
+      "checked": true,
+      "cwd": "F:\\project\\dsh-model",
+      "provider": "filesystem",
+      "ours": 7,
+      "registry": 9,
+      "overlaid": 7,
+      "missing": [],
+      "extra": [
+        "cordis-plugin-development",
+        "editing-cordis-compositions"
+      ],
+      "consistent": false
+    }
+  }
+}

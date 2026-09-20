@@ -102,7 +102,7 @@ curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 
 ### 与 DSH 实际解析的一致性核对
 
-`/registry` 的响应里有一个 `divergence` 字段：把**本插件自己算出的清单**与**注册表里 DSH 实际解析出的那一份**逐条比对（只取 `provider === "filesystem"` 的条目 —— 本插件的 overlay 也注册在同一个注册表里，算进来就成了自己跟自己比）。
+`/registry` 的 `divergence` 只对**与所选 cwd 匹配且观测完整的 agent 视图**进行核对。它比较注册表合并后所有提供方的名称、可观测调用策略和来源；合法 overlay 接管不算缺失或来源冲突。没有匹配会话、cwd 未知或观测不完整时返回 `checked:false`，不借用其它项目冒充当前项目。
 
 为什么需要它：本插件与 `dsh-skill-filesystem` **各有一份配置**（`customSkillDirs`、`bundledSkillDir`、`includeDefaultRoots`、`dshHome`、`agentsHome`），两边没有任何机制保证一致。分叉的后果是：
 
@@ -117,17 +117,14 @@ curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
 agent session-... 的技能视图：共 9 条 —— apple-liquid-glass、grill-me（模型不可用）、...；与 DSH 实际解析一致（9 条）
 ```
 
-### 覆盖只改变调用策略，不改变技能的其它性质
+### 覆盖字段的保留与已知暂缓项
 
 覆盖提供方的候选会**整条**取代文件系统的候选（同层 rank 0 胜出），所以它必须把技能原有的字段
 一并带过来。`whenToUse` 曾经漏掉：一条技能**只要被启停过一次**，它的 `whenToUse` 就会对所有下游
 消费者消失 —— 界面看不出来，注册表也不报错，只是那条信息没了。现在原样带过来，`test/layers.test.mjs`
 里有一条守门测试（去掉转发即失败）。
 
-本插件**不往候选的 `metadata` 里写自己的标记**：那个字段是**整份替换**而不是合并，写了会连带丢掉
-技能自己 frontmatter 里的 `metadata` —— 而本插件的 frontmatter 解析器刻意不解析嵌套映射，复现不了
-它。反正 DSH 现在没有任何地方读 `skill.metadata`，写了没人看却换掉一个真实字段，不划算。策略覆盖的
-信息由本插件自己的接口（`/overrides`）给出。
+本插件保留技能原有的 `metadata` 对象，不往其中添加自己的标记。该对象通过显式声明的 `yaml` 依赖读取；真实注册表 `get()` 的前后对照见 [backend-p2.test.mjs](F:/project/dsh-skills-manager/test/backend-p2.test.mjs)。这不等于全部 frontmatter 语义已与原生一致：用户明确暂缓的 R21（缩进分隔符导致正文变化）仍保留，详见 [修复范围与暂缓记录](F:/project/dsh-skills-manager/docs/bugfix-plan.md)。策略覆盖状态由 `/catalog` 返回的 `overrides` 给出。
 
 ### Agent 工具的参数表只用 DSH 支持的 JSON Schema 子集
 

@@ -72,7 +72,7 @@ test('writeSkillContent 拒绝会把技能弄坏的内容', () => {
     assert.equal(created.ok, true)
     const docPath = created.path
 
-    const broken = writeSkillContent({ docPath, rootPath: f.root.path, content: '没有 frontmatter' })
+    const broken = writeSkillContent({ docPath, root: f.root, content: '没有 frontmatter' })
     assert.equal(broken.ok, false)
     assert.equal(broken.code, 'document.invalid')
     assert.ok(broken.diagnostics.length > 0)
@@ -80,7 +80,7 @@ test('writeSkillContent 拒绝会把技能弄坏的内容', () => {
 
     const ok = writeSkillContent({
       docPath,
-      rootPath: f.root.path,
+      root: f.root,
       content: '---\nname: demo\ndescription: 改过的描述\n---\n新正文\n',
     })
     assert.equal(ok.ok, true, ok.ok ? '' : ok.error)
@@ -206,7 +206,7 @@ test('保存到根目录之外的目标被拒绝', () => {
     const outside = join(f.dshHome, 'outside.md')
     mkdirSync(f.dshHome, { recursive: true })
     writeFileSync(outside, 'x')
-    const result = writeSkillContent({ docPath: outside, rootPath: f.root.path, content: '---\nname: a\ndescription: b\n---\n' })
+    const result = writeSkillContent({ docPath: outside, root: f.root, content: '---\nname: a\ndescription: b\n---\n' })
     assert.equal(result.code, 'path.escape')
   } finally {
     f.cleanup()

@@ -1,0 +1,148 @@
+✖ P2：切换项目必须清理旧项目的 root 过滤器 (201.9519ms)
+✖ P2：启停失败信息不会被后续成功的 GET 清掉 (103.1448ms)
+✖ P2：删除失败保留错误和详情，不伪装成删除成功 (182.2823ms)
+✖ P2：读取编辑正文的网络错误可见且不产生未处理拒绝 (109.6856ms)
+✖ P2：上传读取失败时解除 busy，用户可取消并重试 (122.8984ms)
+✖ P2：不可加载技能可展开诊断和编辑，不误称为同名遮蔽 (33.0407ms)
+✖ P2：同名但调用策略不同必须显示红色核对结果 (29.3357ms)
+✖ P2：慢的旧项目响应不能覆盖后来选择的项目 (9366.0322ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 0
+ℹ fail 8
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10266.6458
+
+✖ failing tests:
+
+test at test\client-p2.test.mjs:36:1
+✖ P2：切换项目必须清理旧项目的 root 过滤器 (201.9519ms)
+  AssertionError [ERR_ASSERTION]: B has a skill; an A root filter must not hide it
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:44:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\client-p2.test.mjs:47:1
+✖ P2：启停失败信息不会被后续成功的 GET 清掉 (103.1448ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /policy-denied-test/. Input:
+  
+  'dshsm-section dshsm-scope  项目根按 dshsm-select dshsm-select__trigger dshsm-select__value F:/review/a dshsm-select__chevron   dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip project-dsh · 1 dshsm-chip user-dsh · 0 dshsm-list-wrap dshsm-item dshsm-row dshsm-row__main dshsm-row__title dshsm-name only-a dshsm-pill dshsm-pill--source project-dsh dshsm-row__desc Demo dshsm-row__meta  F:/review/a/.dsh/skills/only-a/SKILL.md   · rank 100 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 '
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:54:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'dshsm-section dshsm-scope  项目根按 dshsm-select dshsm-select__trigger dshsm-select__value F:/review/a dshsm-select__chevron   dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip project-dsh · 1 dshsm-chip user-dsh · 0 dshsm-list-wrap dshsm-item dshsm-row dshsm-row__main dshsm-row__title dshsm-name only-a dshsm-pill dshsm-pill--source project-dsh dshsm-row__desc Demo dshsm-row__meta  F:/review/a/.dsh/skills/only-a/SKILL.md   · rank 100 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 ',
+    expected: /policy-denied-test/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at test\client-p2.test.mjs:57:1
+✖ P2：删除失败保留错误和详情，不伪装成删除成功 (182.2823ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /delete-denied-test/. Input:
+  
+  'dshsm-section dshsm-scope  项目根按 dshsm-select dshsm-select__trigger dshsm-select__value F:/review/a dshsm-select__chevron   dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip project-dsh · 1 dshsm-chip user-dsh · 0 dshsm-list-wrap dshsm-item dshsm-row dshsm-row__main dshsm-row__title dshsm-name only-a dshsm-pill dshsm-pill--source project-dsh dshsm-row__desc Demo dshsm-row__meta  F:/review/a/.dsh/skills/only-a/SKILL.md   · rank 100 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 '
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:66:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'dshsm-section dshsm-scope  项目根按 dshsm-select dshsm-select__trigger dshsm-select__value F:/review/a dshsm-select__chevron   dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip project-dsh · 1 dshsm-chip user-dsh · 0 dshsm-list-wrap dshsm-item dshsm-row dshsm-row__main dshsm-row__title dshsm-name only-a dshsm-pill dshsm-pill--source project-dsh dshsm-row__desc Demo dshsm-row__meta  F:/review/a/.dsh/skills/only-a/SKILL.md   · rank 100 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 ',
+    expected: /delete-denied-test/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at test\client-p2.test.mjs:70:1
+✖ P2：读取编辑正文的网络错误可见且不产生未处理拒绝 (109.6856ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /read-offline-test/. Input:
+  
+  'dshsm-section dshsm-scope  项目根按 dshsm-select dshsm-select__trigger dshsm-select__value F:/review/a dshsm-select__chevron   dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip project-dsh · 1 dshsm-chip user-dsh · 0 dshsm-list-wrap dshsm-item dshsm-row dshsm-row--selected dshsm-row__main dshsm-row__title dshsm-name only-a dshsm-pill dshsm-pill--source project-dsh dshsm-row__desc Demo dshsm-row__meta  F:/review/a/.dsh/skills/only-a/SKILL.md   · rank 100 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-detail dshsm-kv  文件   F:/review/a/.dsh/skills/only-a/SKILL.md  来源  project-dsh（rank 100，项目级）  文件自身策略  模型 可用 · 用户 可用  当前生效策略  模型 可用 · 用户 可用 dshsm-actions dshsm-btn ✎ 编辑正文 dshsm-btn dshsm-btn--danger ✕ 删除 dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 '
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:79:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'dshsm-section dshsm-scope  项目根按 dshsm-select dshsm-select__trigger dshsm-select__value F:/review/a dshsm-select__chevron   dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip project-dsh · 1 dshsm-chip user-dsh · 0 dshsm-list-wrap dshsm-item dshsm-row dshsm-row--selected dshsm-row__main dshsm-row__title dshsm-name only-a dshsm-pill dshsm-pill--source project-dsh dshsm-row__desc Demo dshsm-row__meta  F:/review/a/.dsh/skills/only-a/SKILL.md   · rank 100 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-detail dshsm-kv  文件   F:/review/a/.dsh/skills/only-a/SKILL.md  来源  project-dsh（rank 100，项目级）  文件自身策略  模型 可用 · 用户 可用  当前生效策略  模型 可用 · 用户 可用 dshsm-actions dshsm-btn ✎ 编辑正文 dshsm-btn dshsm-btn--danger ✕ 删除 dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 ',
+    expected: /read-offline-test/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at test\client-p2.test.mjs:82:1
+✖ P2：上传读取失败时解除 busy，用户可取消并重试 (122.8984ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:89:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\client-p2.test.mjs:94:1
+✖ P2：不可加载技能可展开诊断和编辑，不误称为同名遮蔽 (33.0407ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /1 条被同名技能遮蔽/. Input:
+  
+  'dshsm-section dshsm-scope  项目根按 dshsm-select dshsm-select__trigger dshsm-select__value F:/review/a dshsm-select__chevron   dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip project-dsh · 0 dshsm-chip user-dsh · 0 dshsm-list-wrap dshsm-empty 这个范围内没有技能。 dshsm-shadowed  1 条被同名技能遮蔽 dshsm-row dshsm-row--shadowed dshsm-row__main dshsm-row__title dshsm-name broken dshsm-pill dshsm-pill--muted project-dsh dshsm-pill dshsm-pill--danger 不可加载 dshsm-row__desc Demo dshsm-row__meta  F:/review/a/.dsh/skills/broken/SKILL.md   · rank 100 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 '
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:102:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'dshsm-section dshsm-scope  项目根按 dshsm-select dshsm-select__trigger dshsm-select__value F:/review/a dshsm-select__chevron   dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip project-dsh · 0 dshsm-chip user-dsh · 0 dshsm-list-wrap dshsm-empty 这个范围内没有技能。 dshsm-shadowed  1 条被同名技能遮蔽 dshsm-row dshsm-row--shadowed dshsm-row__main dshsm-row__title dshsm-name broken dshsm-pill dshsm-pill--muted project-dsh dshsm-pill dshsm-pill--danger 不可加载 dshsm-row__desc Demo dshsm-row__meta  F:/review/a/.dsh/skills/broken/SKILL.md   · rank 100 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 ',
+    expected: /1 条被同名技能遮蔽/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }
+
+test at test\client-p2.test.mjs:112:1
+✖ P2：同名但调用策略不同必须显示红色核对结果 (29.3357ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /only-a/. Input:
+  
+  ''
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:121:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: /only-a/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at test\client-p2.test.mjs:125:1
+✖ P2：慢的旧项目响应不能覆盖后来选择的项目 (9366.0322ms)
+  AssertionError [ERR_ASSERTION]: late B response must be discarded
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:140:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

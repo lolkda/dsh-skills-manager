@@ -1,0 +1,153 @@
+✔ CONTROL: ordinary ASCII-path create and policy persistence work (13.3413ms)
+✖ R01: a Host header alone must not authorize skill mutations (5.1207ms)
+✔ R02: HTTP save must preserve a bundled read-only document (2.2179ms)
+✔ R03: catalog-issued root keys must work for Chinese and space-containing project paths (5.4721ms)
+✔ R04: a damaged document must remain readable for repair (3.7221ms)
+✔ R05: retry after a storage failure must persist the policy (5.0898ms)
+✖ R06: two runtime instances sharing DSH_HOME must not lose each other's policies (17.5718ms)
+✔ R07: failed overwrite import must preserve the original bundle (7.1764ms)
+✔ R08: /registry must report the requested project, not the first agent (79.8578ms)
+✔ R09: switching project while a project-root filter is selected must show the new project (186.8057ms)
+✔ R10: a failed policy request must keep its error visible after catalog reload (62.5039ms)
+✖ R11: quoted boolean frontmatter must agree with the installed DSH parser (4.5571ms)
+✖ R12: duplicate YAML keys must be rejected before saving a document DSH will discard (4.4148ms)
+✔ R13: registry policy disagreement must not be labelled consistent (0.3499ms)
+✔ R14: custom-root reordering must not move a saved policy to a different directory (4.3708ms)
+✔ R15: create must reject a name already present as a flat Markdown skill (3.6126ms)
+✔ R16: upload file-read errors must release busy state and show an error (108.3677ms)
+✔ R17: importing two bundles must not overwrite the validated main document (4.0207ms)
+✔ R18: NTFS stream aliases must not replace the validated SKILL.md (2.4721ms)
+✔ R19: editing a skill must not follow a document symlink outside its root (3.2592ms)
+✖ R20: native Cordis-preset skills must not disappear from the manager catalog (5.5162ms)
+✖ R21: enabling a skill must preserve block-scalar frontmatter and body (11.0646ms)
+✔ R22: enabling a skill must preserve its original metadata (9.7735ms)
+✔ R23: enabling a colliding skill must not select a different flat/bundle definition (10.3055ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 18
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 715.7484
+
+✖ failing tests:
+
+test at audit\regressions.mjs:76:1
+✖ R01: a Host header alone must not authorize skill mutations (5.1207ms)
+  AssertionError [ERR_ASSERTION]: unauthenticated mutation accepted; fileExists=true
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:81:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:138:1
+✖ R06: two runtime instances sharing DSH_HOME must not lose each other's policies (17.5718ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  -   'alpha',
+      'beta'
+    ]
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:147:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'beta' ],
+    expected: [ 'alpha', 'beta' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:241:1
+✖ R11: quoted boolean frontmatter must agree with the installed DSH parser (4.5571ms)
+  AssertionError [ERR_ASSERTION]: manager rejects a document native DSH loads
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:247:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:251:1
+✖ R12: duplicate YAML keys must be rejected before saving a document DSH will discard (4.4148ms)
+  AssertionError [ERR_ASSERTION]: manager accepts a document native DSH discards
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:257:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:353:1
+✖ R20: native Cordis-preset skills must not disappear from the manager catalog (5.5162ms)
+  AssertionError [ERR_ASSERTION]: manager never incorporates the preset filesystem custom roots
+  + actual - expected
+  
+  + [
+  +   'cordis-plugin-development',
+  +   'editing-cordis-compositions'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:365:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 'cordis-plugin-development', 'editing-cordis-compositions' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:394:3
+✖ R21: enabling a skill must preserve block-scalar frontmatter and body (11.0646ms)
+  AssertionError [ERR_ASSERTION]: policy-only override changed content
+  + actual - expected
+  
+  + 'second\n---\nbody'
+  - 'body'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:416:14)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'second\n---\nbody',
+    expected: 'body',
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

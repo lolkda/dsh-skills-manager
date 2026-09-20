@@ -1,0 +1,106 @@
+[
+  {
+    "id": "@lolkda/dsh-skills-manager@0.2.0",
+    "name": "@lolkda/dsh-skills-manager",
+    "version": "0.2.0",
+    "size": 71212,
+    "unpackedSize": 214471,
+    "shasum": "2fc8e96fe9733d8bc6967e381ba8a01e9d3176b9",
+    "integrity": "sha512-n5RZVlcjtWmLXtJXq3Im0bfUkdvWcJChwJIR8KpoJ5MclSlEmHLPqbY/QkpvMOdEe/OtnpG5XHej/xbWP7Kspw==",
+    "filename": "lolkda-dsh-skills-manager-0.2.0.tgz",
+    "files": [
+      {
+        "path": "LICENSE",
+        "size": 1063,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 12654,
+        "mode": 420
+      },
+      {
+        "path": "client/client.js",
+        "size": 53350,
+        "mode": 420
+      },
+      {
+        "path": "cordis.patch.yml",
+        "size": 1176,
+        "mode": 420
+      },
+      {
+        "path": "lib/catalog.js",
+        "size": 11813,
+        "mode": 420
+      },
+      {
+        "path": "lib/divergence.js",
+        "size": 3922,
+        "mode": 420
+      },
+      {
+        "path": "lib/frontmatter.js",
+        "size": 15706,
+        "mode": 420
+      },
+      {
+        "path": "lib/index.js",
+        "size": 18767,
+        "mode": 420
+      },
+      {
+        "path": "lib/operations.js",
+        "size": 18428,
+        "mode": 420
+      },
+      {
+        "path": "lib/provider.js",
+        "size": 7393,
+        "mode": 420
+      },
+      {
+        "path": "lib/roots.js",
+        "size": 9334,
+        "mode": 420
+      },
+      {
+        "path": "lib/routes.js",
+        "size": 21127,
+        "mode": 420
+      },
+      {
+        "path": "lib/scope.js",
+        "size": 4509,
+        "mode": 420
+      },
+      {
+        "path": "lib/store.js",
+        "size": 8778,
+        "mode": 420
+      },
+      {
+        "path": "lib/tools.js",
+        "size": 14270,
+        "mode": 420
+      },
+      {
+        "path": "lib/zip.js",
+        "size": 6118,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 2209,
+        "mode": 420
+      },
+      {
+        "path": "scripts/migrate-external-skills.mjs",
+        "size": 3854,
+        "mode": 420
+      }
+    ],
+    "entryCount": 18,
+    "bundled": []
+  }
+]

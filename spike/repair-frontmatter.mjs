@@ -131,8 +131,8 @@ mkdirSync(backupDir, { recursive: true })
 const backupPath = join(backupDir, `${name}-${Date.now()}.md`)
 copyFileSync(record.docPath, backupPath)
 
-const rootPath = roots.find((root) => root.key === record.rootKey).path
-const result = writeSkillContent({ docPath: record.docPath, rootPath, content: next })
+const root = roots.find((root) => root.key === record.rootKey)
+const result = writeSkillContent({ docPath: record.docPath, root, content: next })
 console.log(`${name}: ${JSON.stringify(result)}`)
 console.log(`  备份 → ${backupPath}`)
 if (!result.ok) process.exit(1)

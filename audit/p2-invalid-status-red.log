@@ -1,0 +1,28 @@
+✖ P2：损坏技能的详情不能宣称当前模型可用 (70.5708ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 179.6885
+
+✖ failing tests:
+
+test at test\client-p2.test.mjs:112:1
+✖ P2：损坏技能的详情不能宣称当前模型可用 (70.5708ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /未生效/. Input:
+  
+  ' 模型 可用 · 用户 可用'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-p2.test.mjs:118:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: ' 模型 可用 · 用户 可用',
+    expected: /未生效/,
+    operator: 'match',
+    diff: 'simple'
+  }

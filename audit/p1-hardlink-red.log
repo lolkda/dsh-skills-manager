@@ -1,0 +1,31 @@
+✖ HTTP 保存不能通过硬链接改动根外同一文件 (40.4828ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 326.5066
+
+✖ failing tests:
+
+test at test\mutation-safety.test.mjs:61:1
+✖ HTTP 保存不能通过硬链接改动根外同一文件 (40.4828ms)
+  AssertionError [ERR_ASSERTION]: a root-local pathname must not mutate its outside hardlink alias
+  + actual - expected
+  
+  + '---\nname: demo\ndescription: Safe fixture\n---\nOriginal body\nChanged'
+  - '---\nname: demo\ndescription: Safe fixture\n---\nOriginal body\n'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/mutation-safety.test.mjs:75:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '---\nname: demo\ndescription: Safe fixture\n---\nOriginal body\nChanged',
+    expected: '---\nname: demo\ndescription: Safe fixture\n---\nOriginal body\n',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

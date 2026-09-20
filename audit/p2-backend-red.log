@@ -1,0 +1,422 @@
+✖ R03: catalog-issued Chinese/space root keys support writes (9.9903ms)
+✖ R04: broken files remain readable, repairable and deletable; policy requires winner (6.0986ms)
+✖ R04: existing tool schemas can manage one unique broken document (4.6769ms)
+✖ R04: shadowed entities may be edited, but forged docPath never bypasses catalog (18.4478ms)
+✖ R04: ambiguous names are rejected; deleting a loser preserves the remaining override (5.955ms)
+✖ R08: registry selects the requested cwd and declines unrelated or unknown agent cwd (35.9101ms)
+✖ R13: policy mismatches are reported; a legitimate overlay provider change is not (0.2938ms)
+✖ R13: absent fields are not guessed; source conflicts are independently reported (1.0693ms)
+✖ R14: reordered custom roots retain path-bound policy and configured precedence (10.6232ms)
+✖ R14: legacy custom-N state is retained with diagnostics rather than guessed (4.5671ms)
+✖ R15: logical collision flat/create (5.875ms)
+✖ R15: logical collision flat/import (4.292ms)
+✖ R15: logical collision flat/overwrite (4.2038ms)
+✖ R15: logical collision alias-bundle/create (3.3051ms)
+✖ R15: logical collision alias-bundle/import (3.8284ms)
+✖ R15: logical collision alias-bundle/overwrite (4.0376ms)
+✔ Import overwrite permits an old attachment file to become a directory (6.2794ms)
+✖ R22: a policy overlay preserves metadata through the real registry.get (20.1825ms)
+✖ R23: flat/bundle ties match native filesystem and do not switch on enable (11.2026ms)
+✖ HTTP saves immediately invalidate the cached overlay catalog (13.9432ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 1
+ℹ fail 19
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 363.1525
+
+✖ failing tests:
+
+test at test\backend-p2.test.mjs:60:1
+✖ R03: catalog-issued Chinese/space root keys support writes (9.9903ms)
+  AssertionError [ERR_ASSERTION]: 缺少或非法的 rootKey
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:66:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:71:1
+✖ R04: broken files remain readable, repairable and deletable; policy requires winner (6.0986ms)
+  AssertionError [ERR_ASSERTION]: 找不到名为 broken 的技能
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:78:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:86:1
+✖ R04: existing tool schemas can manage one unique broken document (4.6769ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:90:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:97:1
+✖ R04: shadowed entities may be edited, but forged docPath never bypasses catalog (18.4478ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:104:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:113:1
+✖ R04: ambiguous names are rejected; deleting a loser preserves the remaining override (5.955ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'skill.ambiguous'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:118:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'skill.ambiguous',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:125:1
+✖ R08: registry selects the requested cwd and declines unrelated or unknown agent cwd (35.9101ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'D:\\Personal\\Temp\\dshsm-backend-p2-tIVCWM\\a'
+  - 'D:\\Personal\\Temp\\dshsm-backend-p2-tIVCWM\\b'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:133:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'D:\\Personal\\Temp\\dshsm-backend-p2-tIVCWM\\a',
+    expected: 'D:\\Personal\\Temp\\dshsm-backend-p2-tIVCWM\\b',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:141:1
+✖ R13: policy mismatches are reported; a legitimate overlay provider change is not (0.2938ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:144:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:149:1
+✖ R13: absent fields are not guessed; source conflicts are independently reported (1.0693ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== 0
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:152:50)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:156:1
+✖ R14: reordered custom roots retain path-bound policy and configured precedence (10.6232ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== null
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:166:87)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: null,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:171:1
+✖ R14: legacy custom-N state is retained with diagnostics rather than guessed (4.5671ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== null
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:177:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: null,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:183:3
+✖ R15: logical collision flat/create (5.875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'skill.exists'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:192:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'skill.exists',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:183:3
+✖ R15: logical collision flat/import (4.292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'skill.exists'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:192:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'skill.exists',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:183:3
+✖ R15: logical collision flat/overwrite (4.2038ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:190:61)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:183:3
+✖ R15: logical collision alias-bundle/create (3.3051ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'skill.exists'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:192:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'skill.exists',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:183:3
+✖ R15: logical collision alias-bundle/import (3.8284ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'skill.exists'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:192:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'skill.exists',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:183:3
+✖ R15: logical collision alias-bundle/overwrite (4.0376ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:190:61)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:206:1
+✖ R22: a policy overlay preserves metadata through the real registry.get (20.1825ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + undefined
+  - {
+  -   nested: {
+  -     flag: true
+  -   },
+  -   owner: 'team'
+  - }
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:214:64)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { owner: 'team', nested: { flag: true } },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:217:1
+✖ R23: flat/bundle ties match native filesystem and do not switch on enable (11.2026ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'D:\\Personal\\Temp\\dshsm-backend-p2-WtaJhP\\home\\skills\\a.md'
+  - 'D:\\Personal\\Temp\\dshsm-backend-p2-WtaJhP\\home\\skills\\a-b\\SKILL.md'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:223:74)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'D:\\Personal\\Temp\\dshsm-backend-p2-WtaJhP\\home\\skills\\a.md',
+    expected: 'D:\\Personal\\Temp\\dshsm-backend-p2-WtaJhP\\home\\skills\\a-b\\SKILL.md',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\backend-p2.test.mjs:228:1
+✖ HTTP saves immediately invalidate the cached overlay catalog (13.9432ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'Fixture'
+  - 'Changed'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/backend-p2.test.mjs:236:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Fixture',
+    expected: 'Changed',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

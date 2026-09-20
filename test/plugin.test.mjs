@@ -94,7 +94,8 @@ test('GET /registry 有 agent 时，把该 agent 的作用域 key 传给注册�
   const agentCtx = { get: () => undefined }
   agentCtx[Symbol('dsh.scope')] = scopeKey
 
-  const env = await boot({ agents: { list: () => [{ id: 'agent-1', ctx: agentCtx }] } })
+  // 新契约不借用未知项目的 agent；该夹具明确归属请求默认 cwd。
+  const env = await boot({ agents: { list: () => [{ id: 'agent-1', ctx: agentCtx, session: { header: { cwd: process.cwd() } } }] } })
   try {
     const seen = []
     const original = env.registry.snapshot.bind(env.registry)

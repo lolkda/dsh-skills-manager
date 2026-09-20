@@ -1,0 +1,4 @@
+warning: in the working copy of 'lib/catalog.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/divergence.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/roots.test.mjs', LF will be replaced by CRLF the next time Git touches it

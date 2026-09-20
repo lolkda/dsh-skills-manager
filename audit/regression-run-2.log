@@ -1,0 +1,472 @@
+✔ CONTROL: ordinary ASCII-path create and policy persistence work (11.7663ms)
+✖ R01: a Host header alone must not authorize skill mutations (3.9092ms)
+✖ R02: HTTP save must preserve a bundled read-only document (2.896ms)
+✖ R03: catalog-issued root keys must work for Chinese and space-containing project paths (2.1751ms)
+✖ R04: a damaged document must remain readable for repair (3.8128ms)
+✖ R05: retry after a storage failure must persist the policy (4.4308ms)
+✖ R06: two runtime instances sharing DSH_HOME must not lose each other's policies (16.8806ms)
+✖ R07: failed overwrite import must preserve the original bundle (4.6875ms)
+✖ R08: /registry must report the requested project, not the first agent (65.1802ms)
+✖ R09: switching project while a project-root filter is selected must show the new project (174.7995ms)
+✖ R10: a failed policy request must keep its error visible after catalog reload (45.6692ms)
+✖ R11: quoted boolean frontmatter must agree with the installed DSH parser (4.7761ms)
+✖ R12: duplicate YAML keys must be rejected before saving a document DSH will discard (4.4448ms)
+✖ R13: registry policy disagreement must not be labelled consistent (0.2979ms)
+✖ R14: custom-root reordering must not move a saved policy to a different directory (4.2405ms)
+✖ R15: create must reject a name already present as a flat Markdown skill (4.2618ms)
+✖ R16: upload file-read errors must release busy state and show an error (107.8574ms)
+✖ R17: importing two bundles must not overwrite the validated main document (4.464ms)
+✖ R18: NTFS stream aliases must not replace the validated SKILL.md (7.0618ms)
+✖ R19: editing a skill must not follow a document symlink outside its root (11.0038ms)
+✖ R20: native Cordis-preset skills must not disappear from the manager catalog (9.5171ms)
+✖ R21: enabling a skill must preserve block-scalar frontmatter and body (17.98ms)
+✖ R22: enabling a skill must preserve its original metadata (14.8084ms)
+✖ R23: enabling a colliding skill must not select a different flat/bundle definition (22.8601ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 1
+ℹ fail 23
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 699.7209
+
+✖ failing tests:
+
+test at audit\regressions.mjs:76:1
+✖ R01: a Host header alone must not authorize skill mutations (3.9092ms)
+  AssertionError [ERR_ASSERTION]: unauthenticated mutation accepted; fileExists=true
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:81:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:86:1
+✖ R02: HTTP save must preserve a bundled read-only document (2.896ms)
+  AssertionError [ERR_ASSERTION]: read-only document changed, result.ok=true
+  + actual - expected
+  
+  + '---\nname: readonly\ndescription: Changed by HTTP\n---\nFixture body\n'
+  - '---\nname: readonly\ndescription: Review fixture\n---\nFixture body\n'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:94:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '---\nname: readonly\ndescription: Changed by HTTP\n---\nFixture body\n',
+    expected: '---\nname: readonly\ndescription: Review fixture\n---\nFixture body\n',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:98:1
+✖ R03: catalog-issued root keys must work for Chinese and space-containing project paths (2.1751ms)
+  AssertionError [ERR_ASSERTION]: server-issued root key rejected: root.invalid: project-dsh@d:/personal/temp/dshsm-review-brljse/project 中文 with space
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:106:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:110:1
+✖ R04: a damaged document must remain readable for repair (3.8128ms)
+  AssertionError [ERR_ASSERTION]: broken file is on disk and in catalog, but read fails: skill.unknown
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:118:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:123:1
+✖ R05: retry after a storage failure must persist the policy (4.4308ms)
+  AssertionError [ERR_ASSERTION]: retry reported ok, changed=false, but state.json was never written
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:134:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:138:1
+✖ R06: two runtime instances sharing DSH_HOME must not lose each other's policies (16.8806ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  -   'alpha',
+      'beta'
+    ]
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:147:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'beta' ],
+    expected: [ 'alpha', 'beta' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:151:1
+✖ R07: failed overwrite import must preserve the original bundle (4.6875ms)
+  AssertionError [ERR_ASSERTION]: failure returned after the old bundle had already been destroyed
+  + actual - expected
+  
+  + '---\nname: existing\ndescription: Replacement\n---\nFixture body\n'
+  - '---\nname: existing\ndescription: Original must survive\n---\nFixture body\n'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:166:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '---\nname: existing\ndescription: Replacement\n---\nFixture body\n',
+    expected: '---\nname: existing\ndescription: Original must survive\n---\nFixture body\n',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:171:1
+✖ R08: /registry must report the requested project, not the first agent (65.1802ms)
+  AssertionError [ERR_ASSERTION]: selected B in request, but response compares A
+  + actual - expected
+  
+  + 'D:\\Personal\\Temp\\dshsm-plugin-ggEYZj\\project-a'
+  - 'D:\\Personal\\Temp\\dshsm-plugin-ggEYZj\\project-b'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:186:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'D:\\Personal\\Temp\\dshsm-plugin-ggEYZj\\project-a',
+    expected: 'D:\\Personal\\Temp\\dshsm-plugin-ggEYZj\\project-b',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:191:1
+✖ R09: switching project while a project-root filter is selected must show the new project (174.7995ms)
+  AssertionError [ERR_ASSERTION]: new project has a skill, but stale filter shows: dshsm-list-wrap dshsm-empty 这个范围内没有技能。
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:209:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:213:1
+✖ R10: a failed policy request must keep its error visible after catalog reload (45.6692ms)
+  AssertionError [ERR_ASSERTION]: successful GET reload must not erase the failed POST message
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:224:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'dshsm-section dshsm-scope  项目根按  D:\\Personal\\Temp\\dshsm-review-btr1DS\\project dshsm-scope-hint 解析 .dsh/skills 与 .agents/skills；换目录会改变项目级技能 dshsm-block dshsm-roots dshsm-chip dshsm-chip--active 全部 dshsm-chip dshsm-chip--empty project-dsh · 0（目录不存在） dshsm-chip dshsm-chip--empty project-agents · 0（目录不存在） dshsm-chip user-dsh · 1 dshsm-chip dshsm-chip--empty user-agents · 0（目录不存在） dshsm-list-wrap dshsm-item dshsm-row dshsm-row__main dshsm-row__title dshsm-name plain dshsm-pill dshsm-pill--source user-dsh dshsm-row__desc Review fixture dshsm-row__meta  D:\\Personal\\Temp\\dshsm-review-btr1DS\\home\\skills\\plain\\SKILL.md   · rank 400 dshsm-row__action dshsm-switch dshsm-switch--on dshsm-switch__knob  dshsm-addRow dshsm-addButton ＋ 新建技能 dshsm-addButton ＋ 导入技能 dshsm-foot 启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。 ',
+    expected: /policy-denied-review-marker/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:241:1
+✖ R11: quoted boolean frontmatter must agree with the installed DSH parser (4.7761ms)
+  AssertionError [ERR_ASSERTION]: manager rejects a document native DSH loads
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:247:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:251:1
+✖ R12: duplicate YAML keys must be rejected before saving a document DSH will discard (4.4448ms)
+  AssertionError [ERR_ASSERTION]: manager accepts a document native DSH discards
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:257:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:261:1
+✖ R13: registry policy disagreement must not be labelled consistent (0.2979ms)
+  AssertionError [ERR_ASSERTION]: equal names do not imply equal enabled state
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:264:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:267:1
+✖ R14: custom-root reordering must not move a saved policy to a different directory (4.2405ms)
+  AssertionError [ERR_ASSERTION]: B inherited a policy the user set on A
+  
+  false !== null
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:278:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: null,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:282:1
+✖ R15: create must reject a name already present as a flat Markdown skill (4.2618ms)
+  AssertionError [ERR_ASSERTION]: duplicate was accepted; records=2
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:287:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:291:1
+✖ R16: upload file-read errors must release busy state and show an error (107.8574ms)
+  AssertionError [ERR_ASSERTION]: file.text rejection leaves upload and cancel permanently busy
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:302:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:306:1
+✖ R17: importing two bundles must not overwrite the validated main document (4.464ms)
+  AssertionError [ERR_ASSERTION]: import says success but a different ZIP member replaced the validated document
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:316:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:320:1
+✖ R18: NTFS stream aliases must not replace the validated SKILL.md (7.0618ms)
+  AssertionError [ERR_ASSERTION]: NTFS default-stream alias corrupted the validated document
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:330:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:334:1
+✖ R19: editing a skill must not follow a document symlink outside its root (11.0038ms)
+  AssertionError [ERR_ASSERTION]: outside-root target changed, result.ok=true
+  + actual - expected
+  
+  + '---\n' +
+  +   'name: linked\n' +
+  +   'description: Unexpected outside-root write\n' +
+  +   '---\n' +
+  +   'Fixture body\n'
+  - '---\nname: linked\ndescription: Outside the skill root\n---\nFixture body\n'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:347:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '---\nname: linked\ndescription: Unexpected outside-root write\n---\nFixture body\n',
+    expected: '---\nname: linked\ndescription: Outside the skill root\n---\nFixture body\n',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:351:1
+✖ R20: native Cordis-preset skills must not disappear from the manager catalog (9.5171ms)
+  AssertionError [ERR_ASSERTION]: manager never incorporates the preset filesystem custom roots
+  + actual - expected
+  
+  + [
+  +   'cordis-plugin-development',
+  +   'editing-cordis-compositions'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:363:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 'cordis-plugin-development', 'editing-cordis-compositions' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:392:3
+✖ R21: enabling a skill must preserve block-scalar frontmatter and body (17.98ms)
+  AssertionError [ERR_ASSERTION]: policy-only override changed content
+  + actual - expected
+  
+  + 'second\n---\nbody'
+  - 'body'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:413:14)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'second\n---\nbody',
+    expected: 'body',
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:392:3
+✖ R22: enabling a skill must preserve its original metadata (14.8084ms)
+  AssertionError [ERR_ASSERTION]: policy-only override changed metadata
+  + actual - expected
+  
+  + undefined
+  - {
+  -   nested: {
+  -     flag: true
+  -   },
+  -   owner: 'team'
+  - }
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:413:14)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { owner: 'team', nested: { flag: true } },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at audit\regressions.mjs:392:3
+✖ R23: enabling a colliding skill must not select a different flat/bundle definition (22.8601ms)
+  AssertionError [ERR_ASSERTION]: policy-only override changed content
+  
+  'FLAT' !== 'BUNDLE'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/audit/regressions.mjs:413:14)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'FLAT',
+    expected: 'BUNDLE',
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

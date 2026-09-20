@@ -176,7 +176,9 @@ window.__ModuleLoader__.load({
           h(
             'dd',
             null,
-            `模型 ${skill.effectiveModelInvocable ? '可用' : '不可用'} · 用户 ${skill.effectiveUserInvocable ? '可用' : '不可用'}`,
+            !skill.loadable ? '未生效（文档不可加载）'
+              : !skill.winner ? '未生效（被同名技能遮蔽）'
+                : `模型 ${skill.effectiveModelInvocable ? '可用' : '不可用'} · 用户 ${skill.effectiveUserInvocable ? '可用' : '不可用'}`,
             overridden ? h('span', { className: 'dshsm-hint' }, '（来自手动启停覆盖，源文件未改动）') : null,
           ),
         ),
@@ -250,7 +252,7 @@ window.__ModuleLoader__.load({
       const save = async () => {
         setBusy(true)
         setProblems([])
-        const response = await request('/skill/save', { rootKey: props.rootKey, name: props.name, content: text }).catch((error) => ({
+        const response = await request('/skill/save', { rootKey: props.rootKey, name: props.name, docPath: props.docPath, content: text }).catch((error) => ({
           ok: false,
           error: String(error && error.message ? error.message : error),
         }))
@@ -347,15 +349,20 @@ window.__ModuleLoader__.load({
         if (!file) return
         setBusy(true)
         setError(null)
-        const isZip = /\.zip$/i.test(file.name)
-        const payload = isZip
-          ? { kind: 'zip', base64: await readBase64(file), overwrite }
-          : { kind: 'markdown', fileName: file.name, content: await file.text(), overwrite }
-        const response = await request('/skill/import', { rootKey: props.rootKey, ...payload }).catch((err) => ({ ok: false, error: String(err) }))
-        setBusy(false)
-        event.target.value = ''
-        if (response.ok) return props.onDone()
-        setError(response.diagnostics ? response.diagnostics.map((d) => d.message).join('；') : (response.error ?? '导入失败'))
+        try {
+          const isZip = /\.zip$/i.test(file.name)
+          const payload = isZip
+            ? { kind: 'zip', base64: await readBase64(file), overwrite }
+            : { kind: 'markdown', fileName: file.name, content: await file.text(), overwrite }
+          const response = await request('/skill/import', { rootKey: props.rootKey, ...payload })
+          if (response.ok) return props.onDone()
+          setError(response.diagnostics ? response.diagnostics.map((d) => d.message).join('；') : (response.error ?? '导入失败'))
+        } catch (error) {
+          setError(String(error && error.message ? error.message : error))
+        } finally {
+          setBusy(false)
+          event.target.value = ''
+        }
       }
 
       /**
@@ -494,7 +501,9 @@ window.__ModuleLoader__.load({
       if (!divergence || !divergence.checked) return null
       const missing = divergence.missing ?? []
       const extra = divergence.extra ?? []
-      if (missing.length === 0 && extra.length === 0) {
+      const policyMismatches = divergence.policyMismatches ?? []
+      const sourceMismatches = divergence.sourceMismatches ?? []
+      if (missing.length === 0 && extra.length === 0 && policyMismatches.length === 0 && sourceMismatches.length === 0) {
         // 「接管」这句要说出来：注册表里那几条的提供方是本插件而不是文件系统提供方，
         // 不说清楚会让人以为核对漏了它们。它不影响结论，但影响这句话可不可信。
         const overlaid = divergence.overlaid > 0 ? `，其中 ${divergence.overlaid} 条由本插件的覆盖层接管` : ''
@@ -503,6 +512,8 @@ window.__ModuleLoader__.load({
       const parts = []
       if (missing.length > 0) parts.push(`本插件多报了 ${missing.length} 条（DSH 里没有，模型收不到）：${missing.join('、')}`)
       if (extra.length > 0) parts.push(`本插件少报了 ${extra.length} 条（DSH 里有，界面看不到）：${extra.join('、')}`)
+      if (policyMismatches.length > 0) parts.push(`调用策略与 DSH 不一致：${policyMismatches.join('、')}`)
+      if (sourceMismatches.length > 0) parts.push(`生效来源与 DSH 不一致：${sourceMismatches.join('、')}`)
       return h('div', { className: 'dshsm-notice dshsm-notice--danger' }, parts.join('；'))
     }
 
@@ -515,12 +526,16 @@ window.__ModuleLoader__.load({
       const [editor, setEditor] = useState(null)
       const [cwd, setCwd] = useState(null)
       const [registry, setRegistry] = useState(null)
+      const loadGeneration = useRef(0)
+      const editorGeneration = useRef(0)
 
       /**
        * 重新拉取目录。
        * @returns {Promise<void>} 完成
        */
       const reload = useCallback(async () => {
+        const generation = ++loadGeneration.current
+        const requestedCwd = pinnedCwd
         try {
           // 同时拉注册表：本插件与 dsh-skill-filesystem 各有一份配置，两边没有任何机制保证
           // 一致。多报会让用户以为技能在生效、少报会让技能隐形，两种都不报错 —— 只能主动比。
@@ -528,6 +543,7 @@ window.__ModuleLoader__.load({
             request('/catalog'),
             request('/registry').catch(() => null),
           ])
+          if (generation !== loadGeneration.current || requestedCwd !== pinnedCwd) return
           setRegistry(registry && registry.ok ? registry.data : null)
           if (!response.ok) {
             setError(response.error ?? '读取目录失败')
@@ -539,7 +555,9 @@ window.__ModuleLoader__.load({
           setCwd(pinnedCwd)
           setError(null)
         } catch (failure) {
-          setError(String(failure && failure.message ? failure.message : failure))
+          if (generation === loadGeneration.current && requestedCwd === pinnedCwd) {
+            setError(String(failure && failure.message ? failure.message : failure))
+          }
         }
       }, [])
 
@@ -554,7 +572,13 @@ window.__ModuleLoader__.load({
        */
       const chooseCwd = async (next) => {
         pinnedCwd = next
+        editorGeneration.current += 1
         setCwd(next)
+        setFilter('all')
+        setSelected(null)
+        setEditor(null)
+        setMode(null)
+        setError(null)
         await reload()
       }
 
@@ -566,13 +590,17 @@ window.__ModuleLoader__.load({
        */
       const toggle = useCallback(
         async (skill, next) => {
+          const requestedCwd = pinnedCwd
           const response = await request('/policy', { rootKey: skill.rootKey, name: skill.name, enabled: next }).catch((failure) => ({
             ok: false,
             error: String(failure),
           }))
-          if (!response.ok) setError(response.error ?? '设置失败')
-          else setError(null)
+          if (requestedCwd !== pinnedCwd) return
+          const failure = response.ok ? null : (response.error ?? '设置失败')
+          if (failure) setError(failure)
           await reload()
+          // 刷新仍用于重新观察实际状态，但 GET 成功不能抹掉 POST 的失败。
+          if (failure && requestedCwd === pinnedCwd) setError(failure)
         },
         [reload],
       )
@@ -583,11 +611,16 @@ window.__ModuleLoader__.load({
        * @returns {Promise<void>} 完成
        */
       const openEditor = useCallback(async (skill) => {
-        const response = await request(`/skill/content?rootKey=${encodeURIComponent(skill.rootKey)}&name=${encodeURIComponent(skill.name)}`)
+        const generation = ++editorGeneration.current
+        const requestedCwd = pinnedCwd
+        const response = await request(`/skill/content?rootKey=${encodeURIComponent(skill.rootKey)}&name=${encodeURIComponent(skill.name)}&docPath=${encodeURIComponent(skill.docPath)}`)
+          .catch((failure) => ({ ok: false, error: String(failure && failure.message ? failure.message : failure) }))
+        if (generation !== editorGeneration.current || requestedCwd !== pinnedCwd) return
         if (!response.ok) {
           setError(response.error ?? '无法读取正文')
           return
         }
+        setError(null)
         setEditor({ skill, ...response })
       }, [])
 
@@ -602,6 +635,39 @@ window.__ModuleLoader__.load({
       const siblings = data && selectedSkill ? data.skills.filter((skill) => skill.name === selectedSkill.name) : []
       const writeRoot = roots.find((root) => root.source === 'user-dsh') ?? roots.find((root) => root.mutable)
       const candidates = data && Array.isArray(data.candidates) ? data.candidates : []
+      const damagedSkills = skills.filter((skill) => !skill.loadable)
+      const shadowedSkills = skills.filter((skill) => !skill.winner && skill.loadable)
+      const rootDiagnostics = data && Array.isArray(data.diagnostics) ? data.diagnostics.filter((item) => !item.skill) : []
+
+      // 管理的是磁盘实体，不是只有 winner 才有资格被读取或修复。
+      const renderSkill = (skill) => h(
+        'div',
+        { key: skill.docPath, className: 'dshsm-item' },
+        h(SkillRow, {
+          skill,
+          selected: selected === skill.docPath,
+          onSelect: () => setSelected(selected === skill.docPath ? null : skill.docPath),
+          onToggle: toggle,
+        }),
+        selected === skill.docPath ? h(Detail, {
+          skill,
+          siblings,
+          onEdit: () => openEditor(skill),
+          onToggle: toggle,
+          onDelete: async () => {
+            const requestedCwd = pinnedCwd
+            const response = await request('/skill/delete', { rootKey: skill.rootKey, name: skill.name, docPath: skill.docPath })
+              .catch((failure) => ({ ok: false, error: String(failure && failure.message ? failure.message : failure) }))
+            if (requestedCwd !== pinnedCwd) return
+            if (!response.ok) {
+              setError(response.error ?? '删除失败')
+              return
+            }
+            setSelected(null)
+            await reload()
+          },
+        }) : null,
+      )
 
       if (!data && !error) return h('div', { className: 'dshsm-section' }, h('p', { className: 'dshsm-hint' }, '正在读取技能目录…'))
 
@@ -620,6 +686,8 @@ window.__ModuleLoader__.load({
         ),
         error ? h('div', { className: 'dshsm-notice dshsm-notice--danger' }, error) : null,
         data && data.damaged ? h('div', { className: 'dshsm-notice dshsm-notice--warn' }, data.damaged) : null,
+        rootDiagnostics.length > 0 ? h('div', { className: 'dshsm-notice dshsm-notice--warn' },
+          rootDiagnostics.map((item, index) => h('p', { key: `${item.code}-${index}` }, item.message))) : null,
         divergenceNotice(registry ? registry.divergence : null),
         mode === 'create'
           ? h(CreateForm, {
@@ -685,54 +753,17 @@ window.__ModuleLoader__.load({
                 { className: 'dshsm-list-wrap' },
                 skills.filter((skill) => skill.winner).length === 0
                   ? h('p', { className: 'dshsm-empty' }, '这个范围内没有技能。')
-                  : skills
-                      .filter((skill) => skill.winner)
-                      .map((skill) =>
-                        h(
-                          'div',
-                          { key: skill.docPath, className: 'dshsm-item' },
-                          h(SkillRow, {
-                            skill,
-                            selected: selected === skill.docPath,
-                            // 再点一次收起 —— 展开态是一个可切换的东西，不是「选中后不可取消」。
-                            onSelect: () => setSelected(selected === skill.docPath ? null : skill.docPath),
-                            onToggle: toggle,
-                          }),
-                          selected === skill.docPath
-                            ? h(Detail, {
-                                skill,
-                                siblings,
-                                onEdit: () => openEditor(skill),
-                                onToggle: toggle,
-                                onDelete: async () => {
-                                  // 没有回收站了，这一下就是永久删除 —— 所以必须问一句。
-                                  const response = await request('/skill/delete', { rootKey: skill.rootKey, name: skill.name })
-                                  if (!response.ok) setError(response.error ?? '删除失败')
-                                  setSelected(null)
-                                  await reload()
-                                },
-                              })
-                            : null,
-                        ),
-                      ),
+                  : skills.filter((skill) => skill.winner).map(renderSkill),
               ),
-              skills.filter((skill) => !skill.winner).length > 0
-                ? h(
-                    'details',
-                    { className: 'dshsm-shadowed' },
-                    h('summary', null, `${skills.filter((skill) => !skill.winner).length} 条被同名技能遮蔽`),
-                    skills
-                      .filter((skill) => !skill.winner)
-                      .map((skill) =>
-                        h(SkillRow, {
-                          key: skill.docPath,
-                          skill,
-                          selected: false,
-                          onSelect: () => {},
-                          onToggle: toggle,
-                        }),
-                      ),
-                  )
+              damagedSkills.length > 0
+                ? h('details', { className: 'dshsm-damaged', open: true },
+                    h('summary', null, `${damagedSkills.length} 条不可加载（可展开诊断并修复）`),
+                    damagedSkills.map(renderSkill))
+                : null,
+              shadowedSkills.length > 0
+                ? h('details', { className: 'dshsm-shadowed' },
+                    h('summary', null, `${shadowedSkills.length} 条被同名技能遮蔽`),
+                    shadowedSkills.map(renderSkill))
                 : null,
               // 添加入口放在列表下面，用整宽虚线按钮 —— 和「模型」页的「添加提供方」一个语言。
               h(
@@ -744,7 +775,10 @@ window.__ModuleLoader__.load({
               h(
                 'p',
                 { className: 'dshsm-foot' },
-                '启停只改变 DSH 里的调用策略，源文件不会被改动。这里显示的是 DSH 注册表的真实裁决结果。',
+                '启停更新 DSH 调用策略，源文件不会被改动。列表包含磁盘条目。',
+                registry && registry.divergence && registry.divergence.checked
+                  ? '当前会话的实际可用性以上方核对结果为准。'
+                  : '尚无当前会话的注册表观测，不能据此断言模型实际可用。',
                 data && data.logPath ? ` 操作日志：${data.logPath}` : '',
               ),
             )
@@ -952,8 +986,8 @@ window.__ModuleLoader__.load({
 .dshsm-check{display:flex;align-items:center;gap:6px;font-size:12px;line-height:18px}
 .dshsm-hint{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-quaternary)}
 .dshsm-foot{margin:0;font-size:11px;line-height:16px;color:var(--dsw-alias-label-quaternary)}
-.dshsm-shadowed{margin-top:8px}
-.dshsm-shadowed summary{cursor:pointer;font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary);margin-bottom:6px}
+.dshsm-shadowed,.dshsm-damaged{margin-top:8px}
+.dshsm-shadowed summary,.dshsm-damaged summary{cursor:pointer;font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary);margin-bottom:6px}
 `
 
     return { name, inject, apply }

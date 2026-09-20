@@ -247,8 +247,12 @@ test('界面查看与保存正文：改动落盘，界面里也读得到', async
 
     const save = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/save'))
     assert.ok(save, '应当发出保存请求')
-    assert.deepEqual(Object.keys(save.body).sort(), ['content', 'name', 'rootKey'])
+    assert.deepEqual(Object.keys(save.body).sort(), ['content', 'docPath', 'name', 'rootKey'])
+    const expectedPath = join(env.home, 'skills', 'plain', 'SKILL.md')
+    assert.equal(save.body.docPath, expectedPath)
+    assert.equal(new URL(contentCall.url, 'http://test').searchParams.get('docPath'), expectedPath)
     assert.match(save.body.content, new RegExp(marker))
+    assert.equal(readFileSync(expectedPath, 'utf8'), save.body.content, '保存的必须是所选物理文档')
   } finally {
     env.cleanup()
   }
@@ -283,7 +287,8 @@ test('界面删除技能：先确认，再永久删除', async () => {
 
     const deleteCall = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/delete'))
     assert.ok(deleteCall, '应当发出删除请求')
-    assert.deepEqual(Object.keys(deleteCall.body).sort(), ['name', 'rootKey'])
+    assert.deepEqual(Object.keys(deleteCall.body).sort(), ['docPath', 'name', 'rootKey'])
+    assert.equal(deleteCall.body.docPath, doomed)
     assert.equal(existsSync(doomed), false, '确认之后文件必须真的没了')
     assert.equal(existsSync(join(env.home, 'skills', 'plain')), false, 'bundle 的整个目录都要没了')
   } finally {

@@ -1,0 +1,28 @@
+✔ R03: catalog-issued Chinese/space root keys support writes (36.9139ms)
+✔ R04: broken files remain readable, repairable and deletable; policy requires winner (50.8441ms)
+✔ R04: existing tool schemas can manage one unique broken document (12.8403ms)
+✔ R04: shadowed entities may be edited, but forged docPath never bypasses catalog (53.727ms)
+✔ R04: ambiguous names are rejected; deleting a loser preserves the remaining override (27.6889ms)
+✔ R08: registry selects the requested cwd and declines unrelated or unknown agent cwd (78.361ms)
+✔ R13: policy mismatches are reported; a legitimate overlay provider change is not (3.2742ms)
+✔ R13: absent fields are not guessed; source conflicts are independently reported (0.4257ms)
+✔ R14: reordered custom roots retain path-bound policy and configured precedence (19.2953ms)
+✔ R14: legacy custom-N state is retained with diagnostics rather than guessed (3.8761ms)
+✔ R15: logical collision flat/create (17.1879ms)
+✔ R15: logical collision flat/import (9.4646ms)
+✔ R15: logical collision flat/overwrite (16.592ms)
+✔ R15: logical collision alias-bundle/create (8.4677ms)
+✔ R15: logical collision alias-bundle/import (3.2712ms)
+✔ R15: logical collision alias-bundle/overwrite (9.1935ms)
+✔ Import overwrite permits an old attachment file to become a directory (9.466ms)
+✔ R22: a policy overlay preserves metadata through the real registry.get (88.4126ms)
+✔ R23: flat/bundle ties match native filesystem and do not switch on enable (44.9724ms)
+✔ HTTP saves immediately invalidate the cached overlay catalog (62.7985ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 963.4196

@@ -1,0 +1,268 @@
+
+> @lolkda/dsh-skills-manager@0.1.0 check
+> node --check client/client.js && node --test
+
+✔ 未设覆盖时，agent 层看到 preset 层文件系统提供的全部技能 (564.5983ms)
+✔ 停用后，该 agent 作用域里的裁决真的翻转（不碰源文件） (577.8795ms)
+✔ R03: catalog-issued Chinese/space root keys support writes (43.3931ms)
+✔ R04: broken files remain readable, repairable and deletable; policy requires winner (61.4861ms)
+✔ R04: existing tool schemas can manage one unique broken document (31.8475ms)
+✔ R04: shadowed entities may be edited, but forged docPath never bypasses catalog (43.7414ms)
+✔ R04: ambiguous names are rejected; deleting a loser preserves the remaining override (45.2881ms)
+✔ R08: registry selects the requested cwd and declines unrelated or unknown agent cwd (157.2898ms)
+✔ R13: policy mismatches are reported; a legitimate overlay provider change is not (12.4303ms)
+✔ R13: absent fields are not guessed; source conflicts are independently reported (0.3199ms)
+✔ R14: reordered custom roots retain path-bound policy and configured precedence (14.1046ms)
+✔ R14: legacy custom-N state is retained with diagnostics rather than guessed (20.1692ms)
+✔ R15: logical collision flat/create (5.2413ms)
+✔ R15: logical collision flat/import (13.3871ms)
+✔ R15: logical collision flat/overwrite (8.4078ms)
+✔ R15: logical collision alias-bundle/create (6.0321ms)
+✔ R15: logical collision alias-bundle/import (15.6034ms)
+✔ R15: logical collision alias-bundle/overwrite (13.9735ms)
+✔ Import overwrite permits an old attachment file to become a directory (39.7007ms)
+✔ R22: a policy overlay preserves metadata through the real registry.get (116.7195ms)
+✔ R23: flat/bundle ties match native filesystem and do not switch on enable (71.0141ms)
+✔ HTTP saves immediately invalidate the cached overlay catalog (29.6258ms)
+✔ buildCatalog 按 rank 裁决重名，并保留被遮蔽项 (51.6862ms)
+✔ buildCatalog 对坏文件仍列出并给出诊断 (7.316ms)
+✔ 覆盖施加在胜出根上，且不会被文件策略覆盖 (11.0801ms)
+✔ 对被遮蔽的根设置覆盖时不生效，并明确报出原因 (11.9395ms)
+✔ overridesOf 只返回需要注册表覆盖的胜出技能 (8.1924ms)
+✔ 文件不可读时记录 loadable=false 而不是抛错 (4.2582ms)
+✔ 解析失败的记录不参与仲裁，也不会被当成生效 (12.5808ms)
+✔ 同名技能全部不可加载时，这个名字没有胜出者 (10.5797ms)
+✔ 胜出集合与 DSH 实际加载的集合一致（坏记录被排除） (12.6304ms)
+✔ P2 全链路：损坏技能通过界面 repair 走真实路由与磁盘 (575.649ms)
+✔ P2 全链路：损坏技能通过界面 delete 走真实路由与磁盘 (313.6859ms)
+✔ P2：切换项目必须清理旧项目的 root 过滤器 (409.481ms)
+✔ P2：启停失败信息不会被后续成功的 GET 清掉 (73.2537ms)
+✔ P2：删除失败保留错误和详情，不伪装成删除成功 (168.4359ms)
+✔ P2：读取编辑正文的网络错误可见且不产生未处理拒绝 (109.6413ms)
+✔ P2：上传读取失败时解除 busy，用户可取消并重试 (118.3012ms)
+✔ P2：不可加载技能可展开诊断和编辑，不误称为同名遮蔽 (139.3896ms)
+✔ P2：损坏技能的详情不能宣称当前模型可用 (77.4264ms)
+✔ P2：同名但调用策略不同必须显示红色核对结果 (31.0536ms)
+✔ P2：无法安全迁移的旧 custom 覆盖必须显示全局警告 (29.714ms)
+✔ P2：慢的旧项目响应不能覆盖后来选择的项目 (10918.4866ms)
+✔ 挂载时拉取目录，并把技能、来源与状态渲染出来 (42.363ms)
+✔ 点击开关发出精确的策略请求，并重新拉取目录 (81.9314ms)
+✔ 接口报错时把错误显示出来，而不是白屏 (61.471ms)
+✔ 被遮蔽的技能不当作生效项，且开关被禁用 (62.2081ms)
+✔ 没有标签页，也没有搜索框 —— 面板直接就是技能列表 (28.6639ms)
+✔ 被 DSH 丢弃的技能显示「不可加载」并禁用开关 (31.9651ms)
+✔ 显示项目根是按哪个目录解析的 (30.6024ms)
+✔ 钉住 cwd：首次拿到后用 ?cwd= 显式带回 (77.7995ms)
+✔ 有多个候选目录时给出选择器，切换后按新目录重新解析 (122.9642ms)
+✔ 与 DSH 实际解析一致时给出经实测的确认 (48.0628ms)
+✔ 核对出多报/少报时点名列出，而不是含糊其辞 (77.3799ms)
+✔ 读不到注册表时不编造一致结论 (33.5831ms)
+✔ 没有可用 agent 视图时不假装核对过 (29.2543ms)
+✔ 客户端 bundle 只请求 react，且返回 { name, inject, apply } (9.4781ms)
+✔ 客户端把技能分区注册进 settings.section (2.5984ms)
+✔ 客户端注入样式表，并在卸载时移除 (1.9384ms)
+✔ 注册进 slots 的渲染函数包在错误边界里 (3.1742ms)
+✔ 项目级启停按项目隔离，用户级共享 (195.7439ms)
+✔ 不带 ?cwd= 时，项目根的键不在候选里 —— 写入必须失败而不是写错地方 (88.5806ms)
+✔ 两边一致时如实说一致 (4.5726ms)
+✔ 多报要点名 —— 界面上有、模型收不到 (0.4043ms)
+✔ 少报也要点名 —— 技能在生效而界面看不到 (0.2809ms)
+✔ 比对的是合并后的结果：别的提供方供给的技能也算「收得到」 (0.1753ms)
+✔ 被遮蔽的与加载不上的纪录不参与比对 (0.23ms)
+✔ 缺字段与坏输入不抛异常 (1.1073ms)
+✔ 多报与少报同时存在时两句话都要说 (0.4024ms)
+✔ 被覆盖层接管的技能不算多报 —— 换了胜出者，技能本身还在 (0.1878ms)
+✔ isSkillName 只接受 kebab-case (3.7582ms)
+✔ normalizeSkillName 把常见输入折叠成合法名字 (0.4497ms)
+✔ splitDocument 识别有无 frontmatter 与未闭合 (0.752ms)
+✔ splitDocument 容忍 BOM 与 CRLF (0.2388ms)
+✔ parseBoolean 拒绝被引用的布尔值 (0.2042ms)
+✔ parseFrontmatter 解析标量、引号与块标量 (0.9429ms)
+✔ readSkillDocument 给出与注册表一致的判定 (2.6008ms)
+✔ readSkillDocument 对损坏文档给出可修复的诊断 (0.5863ms)
+✔ buildSkillDocument 产出的文档能被自己读回 (0.4558ms)
+✔ 值里未加引号的冒号会让整条技能被判为不可加载 (0.5976ms)
+✔ 加了引号的冒号是合法的，不受影响 (0.2198ms)
+✔ URL 里的冒号不误伤 (0.1667ms)
+✔ 解析不了的行按错误处理，而不是告警 (0.1921ms)
+✔ 任何 error 级诊断都会让 loadable 为假 (0.1761ms)
+✔ 界面新建技能：字段真的走到了磁盘上 (956.1077ms)
+✔ 界面导入技能：从路径导入走过的字段是真的 (291.9521ms)
+✖ 界面查看与保存正文：改动落盘，界面里也读得到 (419.3613ms)
+✖ 界面删除技能：先确认，再永久删除 (517.4745ms)
+✔ 界面新建：名字非法时把话说出来，而不是静默什么都不发生 (993.62ms)
+✔ test\helpers\client-harness.mjs (505.7031ms)
+✔ test\helpers\host-harness.mjs (535.4593ms)
+✔ 覆盖导入提交失败：恢复成功时还原整个旧包 (23.1356ms)
+✔ 覆盖导入提交失败：恢复失败时保留恢复路径 (52.2677ms)
+✔ 只在宿主层注册覆盖，会被 preset 层的文件系统提供方压掉 (475.5128ms)
+✔ 同一层里注册覆盖，rank 0 才能赢下裁决 (507.4798ms)
+✔ 覆盖胜出之后，技能的其它性质一个都不能变 (355.4007ms)
+✔ HTTP 保存不能绕过 bundled 根的只读限制 (21.1682ms)
+✔ HTTP 保存不能沿文档符号链接写到根外 (9.2829ms)
+✔ HTTP 保存不能通过硬链接改动根外同一文件 (11.7771ms)
+✔ 新建不能穿过指向根外的目录链接 (3.5024ms)
+✔ 写盘失败不发布内存策略，排除障碍后同参数重试会真正保存 (16.2758ms)
+✔ 清除覆盖写盘失败也不提前清空内存状态 (17.6911ms)
+✔ 覆盖 ZIP 写入中途失败时保留原文档及全部附件 (10.9113ms)
+✔ 成功覆盖导入替换整个包并保留新附件 (16.1295ms)
+✔ within 只接受根目录内部的严格子孙路径 (2.6294ms)
+✔ createSkill 规范化名字并落成 bundle 形态 (10.2414ms)
+✔ createSkill 拒绝只读根与空描述 (0.834ms)
+✔ writeSkillContent 拒绝会把技能弄坏的内容 (39.167ms)
+✔ 删除技能：bundle 删整个目录，平铺文件删那个文件 (16.3318ms)
+✔ 删除技能：平铺文件只删那个文件，不带走整个目录 (4.038ms)
+✔ 删除技能：只读根不给删，越界路径不给删 (1.6022ms)
+✔ importFiles 从任意层级的技能目录导入并统一成 SKILL.md (14.1194ms)
+✔ importFiles 平铺 Markdown 也落成 bundle (7.8525ms)
+✔ importFiles 拒绝没有文档、文档损坏与越界条目 (11.9783ms)
+✔ 导入同名技能默认拒绝，overwrite 才覆盖 (12.7249ms)
+✔ 保存到根目录之外的目标被拒绝 (1.6749ms)
+✔ 一条被覆盖的技能读不出来时，不能把整份技能清单拖垮 (563.6325ms)
+✔ apply 注册了路由、工具与两个提供方 (77.5975ms)
+✔ 每个工具都声明了 ctx.tools.register 要求的完整 output (45.8889ms)
+✔ 工具渲染把失败结果显示成可读文本 (74.7447ms)
+✔ webServer 晚于插件就绪时，路由会等它出现再注册 (71.6151ms)
+✔ GET /registry 没有 agent 时退回宿主层视图 (117.8163ms)
+✖ GET /registry 有 agent 时，把该 agent 的作用域 key 传给注册表 (60.5234ms)
+✔ agent 上下文没有作用域标记时如实报告，而不是退回 global 的空结果 (176.7028ms)
+✔ GET /catalog 返回根与技能视图 (121.5687ms)
+✔ POST /policy 停用后，注册表的真实裁决随之改变 (405.6762ms)
+✔ POST /policy 能翻转文件里的 disable-model-invocation (122.8849ms)
+✔ POST /skill/create 落盘，重复创建被拒 (78.6587ms)
+✔ POST /skill/save 拒绝会弄坏技能的正文 (52.4597ms)
+✔ 删除端点：文件真的从磁盘上没了 (125.2477ms)
+✔ 删除技能会一并清掉它的启停覆盖 (83.6931ms)
+✔ 未知 rootKey 与非回环 Host 被拒绝 (58.1342ms)
+✔ validateHost 放行回环与受信主机 (4.6394ms)
+✔ catalog 返回解析用的 cwd 与候选目录列表 (63.5286ms)
+✔ 没有会话时候选列表为空，而不是编一个出来 (35.0701ms)
+✔ 无覆盖时，文件系统提供方的原始策略被如实反映 (251.7617ms)
+✔ 停用覆盖压过文件级策略，且源文件保持不变 (108.9747ms)
+✔ 启用覆盖能翻转文件里的 disable-model-invocation，且正文仍可加载 (95.6796ms)
+✔ 未覆盖的技能不受影响，仍由文件系统提供方服务 (294.6678ms)
+✔ findProjectRoot 停在最近的 .git 祖先，找不到时退回 cwd (5.1071ms)
+✔ pathIdentity 在 Windows 上大小写不敏感 (0.4095ms)
+✔ listRoots 按 rank 排序并与 dsh-skill-filesystem 的默认根对齐 (4.5692ms)
+✖ listRoots 把 customSkillDirs 排在项目根之后、用户根之前 (3.4094ms)
+✔ listRoots 的 includeDefaultRoots=false 只剩自定义根 (2.0688ms)
+✔ 项目根的 key 编入项目路径，使两个项目互不干扰 (4.2197ms)
+✔ scanRoot 只识别一层，并跳过隐藏项与非 markdown (48.1094ms)
+✔ scanRoot 对不存在的根返回空而不是抛错 (2.8077ms)
+✔ normalizeRootKey 只接受已知形状，用于校验外部输入 (0.5197ms)
+✔ agentCwd 只认 agent 自己会话的工作目录 (1.075ms)
+✔ agentScopeView 优先用 agent 自己的 cwd (1.6715ms)
+✔ 拿不到 agent 的 cwd 时才退回调用方给的 (1.1962ms)
+✔ 两边都没有 cwd 时不编一个出来，也不报错 (0.2439ms)
+✔ 读不出作用域标识时如实拒绝，而不是退回 global 层的空结果 (0.308ms)
+✔ scopeKeyOf 沿原型链找作用域标记 (0.1765ms)
+✔ summarizeSnapshot 标出哪些来自本插件 (0.2104ms)
+✔ 注册了七个工具，且每个都带 output.render (7.0957ms)
+✔ skills_create → skills_list → skills_get 串起来真的建了文件 (22.0827ms)
+✔ skills_update 改写正文，改的是磁盘上的文件 (9.1078ms)
+✔ skills_update 拒绝会写坏的文档，且不碰磁盘 (11.6031ms)
+✔ 每个工具的参数 schema 都落在 DSH 支持的子集里 (12.8408ms)
+✔ skills_set_enabled 真的改了策略，而且没有动源文件 (39.8793ms)
+✔ skills_delete 永久删除，磁盘上不留痕迹 (17.9466ms)
+✔ skills_import 能吃下 Markdown 文件、目录与 ZIP (47.5214ms)
+✔ 参数不对时给出可读的失败，而不是抛异常 (1.7836ms)
+✔ readZip 读出存储与 deflate 两种条目 (7.9832ms)
+✔ readZip 对损坏与非 ZIP 输入明确失败 (0.3704ms)
+✔ safeEntryPath 挡住 zip-slip 与 Windows 特例 (0.7458ms)
+✔ readZip 拒绝含穿越路径的归档 (0.5395ms)
+ℹ tests 168
+ℹ suites 0
+ℹ pass 164
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12556.4692
+
+✖ failing tests:
+
+test at test\fullstack.test.mjs:217:1
+✖ 界面查看与保存正文：改动落盘，界面里也读得到 (419.3613ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'content',
+  +   'docPath',
+      'name',
+      'rootKey'
+    ]
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/fullstack.test.mjs:250:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'content', 'docPath', 'name', 'rootKey' ],
+    expected: [ 'content', 'name', 'rootKey' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\fullstack.test.mjs:257:1
+✖ 界面删除技能：先确认，再永久删除 (517.4745ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'docPath',
+      'name',
+      'rootKey'
+    ]
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/fullstack.test.mjs:286:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'docPath', 'name', 'rootKey' ],
+    expected: [ 'name', 'rootKey' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test\plugin.test.mjs:87:1
+✖ GET /registry 有 agent 时，把该 agent 的作用域 key 传给注册表 (60.5234ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'host' !== 'agent'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/plugin.test.mjs:106:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'host',
+    expected: 'agent',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\roots.test.mjs:42:1
+✖ listRoots 把 customSkillDirs 排在项目根之后、用户根之前 (3.4094ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'custom@f:/extra/one'
+  - 'custom-0'
+           ^
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/roots.test.mjs:51:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'custom@f:/extra/one',
+    expected: 'custom-0',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

@@ -1,0 +1,630 @@
+diff --git a/lib/catalog.js b/lib/catalog.js
+index 25477a8..877ad48 100644
+--- a/lib/catalog.js
++++ b/lib/catalog.js
+@@ -50,6 +50,13 @@ export function buildCatalog(options) {
+   const overrides = options.overrides ?? {}
+   const readFile = options.readFile ?? defaultReadFile
+   const diagnostics = []
++  // 旧版位置键缺少目录身份，不能按当前顺序猜测迁移。只诊断，保留原状态。
++  for (const rootKey of Object.keys(overrides)) {
++    if (/^custom-[0-9]+$/.test(rootKey)) diagnostics.push({
++      level: 'warn', code: 'override.legacyCustom', rootKey, source: 'custom',
++      message: `旧版覆盖 ${rootKey} 没有目录路径身份，已保留但不应用；请确认原目录后重新设置启停。`,
++    })
++  }
+   const rootViews = []
+   const all = []
+ 
+@@ -208,14 +215,14 @@ function overrideValue(overrides, rootKey, name) {
+ }
+ 
+ /**
+- * 重名裁决排序：rank 小者在前，同 rank 用根 key 保证结果稳定。
++ * 重名裁决排序：rank 小者在前，同 rank 保留提供方内的发现顺序。
+  * @param {object} a - 记录
+  * @param {object} b - 记录
+  * @returns {number} 排序值
+  */
+ function compareRank(a, b) {
+-  if (a.rank !== b.rank) return a.rank - b.rank
+-  return String(a.rootKey).localeCompare(String(b.rootKey))
++  // stable sort 保留根配置顺序及各根内的原生目录项顺序。
++  return a.rank - b.rank
+ }
+ 
+ /**
+@@ -255,3 +262,28 @@ export function overridesOf(catalog) {
+   }
+   return result
+ }
++
++/**
++ * 管理实体的查找不等于策略 winner 查找：损坏或遮蔽的文档仍可修复。
++ * docPath 只用于精确匹配已经扫描出的实体，绝不直接作为磁盘操作目标。
++ * @param {object} catalog - 本次 roots 下的目录视图
++ * @param {{rootKey?: string, name?: string, docPath?: string|null}} target - 查找条件
++ * @returns {object} 唯一实体或明确的未知/歧义错误
++ */
++export function findCatalogDocument(catalog, target = {}) {
++  const records = (catalog?.skills ?? []).filter(record => target.rootKey === undefined || record.rootKey === target.rootKey)
++  let matches
++  if (target.docPath !== undefined && target.docPath !== null) {
++    if (typeof target.docPath !== 'string' || !target.docPath) return { ok: false, code: 'skill.invalid', error: 'docPath 必须是目录中的文档路径' }
++    matches = records.filter(record => record.docPath === target.docPath)
++  } else {
++    if (typeof target.name !== 'string' || !target.name) return { ok: false, code: 'skill.invalid', error: '缺少技能名' }
++    matches = records.filter(record => record.name === target.name)
++  }
++  if (matches.length === 0) return { ok: false, code: 'skill.unknown', error: `当前目录中找不到指定的技能文档：${target.name ?? ''}` }
++  if (matches.length > 1) return {
++    ok: false, code: 'skill.ambiguous', error: `技能 ${target.name} 对应多个文档，请在界面选择具体文件`,
++    documents: matches.map(({ rootKey, docPath }) => ({ rootKey, docPath })),
++  }
++  return { ok: true, skill: matches[0] }
++}
+diff --git a/lib/divergence.js b/lib/divergence.js
+index 00e21c8..0128c82 100644
+--- a/lib/divergence.js
++++ b/lib/divergence.js
+@@ -1,50 +1,16 @@
+-/**
+- * 把本插件算出的技能清单与 DSH 注册表实际解析出的清单逐条比对。
+- *
+- * 为什么需要这个：本插件与 `dsh-skill-filesystem` 各有一份配置（`customSkillDirs`、
+- * `bundledSkillDir`、甚至根目录的解析规则），两边**没有任何机制保证一致**。一旦分叉：
+- *
+- *   - 我们多报 → 界面上有这个技能，模型却从来收不到；
+- *   - 我们少报 → 技能实际在生效，界面上却看不见，用户会以为它不存在。
+- *
+- * 两种都不会报错。所以只能拿注册表里的真实结果对一遍，并把差异摆到用户面前。
+- *
+- * 比对的对象是注册表**合并之后**的结果 —— 也就是模型真正收到的那一份，所有提供方都算数。
+- * 详见 `compareWithRegistry` 里的说明：这里曾经只认文件系统提供方，那会把所有被本插件
+- * 覆盖过的技能都误判成"DSH 没有"。
+- */
+-
++/** 对比同一 cwd/scope 的目录名称、可观测调用策略与来源；未知字段不猜测。 */
+ import { PROVIDER_NAME } from './provider.js'
++import { pathIdentity } from './roots.js'
+ 
+-/** DSH 文件系统提供者的名字，用于把它的裁决结果从注册表快照里挑出来。 */
+ export const FILESYSTEM_PROVIDER = 'filesystem'
+-
+-/** 本插件覆盖提供方的名字。它接管过的技能在注册表里胜出的就是这一条，但技能本身仍在。 */
+ export const OVERLAY_PROVIDER = PROVIDER_NAME
+ 
+ /**
+- * 比对两份清单。
+- * @param {object} catalog - `buildCatalog` 的结果
+- * @param {object[]} registrySkills - 注册表快照里的技能
+- * @returns {object} 比对结果
++ * @param {object} catalog - 管理器的目录视图
++ * @param {object[]} registrySkills - 原生候选或收敛后的注册表摘要
++ * @returns {object} 名称差异、策略差异、来源差异与实际核对的策略条数
+  */
+ export function compareWithRegistry(catalog, registrySkills) {
+-  // 注册表交出来的是一份**合并之后**的结果：同一个技能名只会留下胜出的那一条。所以这里
+-  // 必须把**所有**提供方都算进来 —— 它不是"别人家的清单"，而是**模型真正收到的那一份**。
+-  //
+-  // 早先这里只认 `filesystem`，理由是"本插件的 overlay 也在同一个注册表里，算进来就成
+-  // 了自己跟自己比"。那个理由站不住：overlay 的贡献不是凭空多出一条技能，而是**同一条
+-  // 技能换了个胜出者**（rank 0 胜过 preset 层的 400）。把它过滤掉，得到的不是"更严格的
+-  // 比对"，而是把所有被覆盖过的技能都误判成"DSH 没有"。
+-  //
+-  // 真机上就是这样：用户手动启用了 7 条，界面随即报出「本插件多报了 7 条（DSH 没有，
+-  // 模型收不到）」，而模型一条不少地收到了。误报比不报更糟 —— 它会让这个提示彻底失去
+-  // 可信度，之后真出问题时没人再看它。
+-  //
+-  // 而且 overlay 也**不可能**凭空造出一条技能：`provider.js` 的 `list()` 只对覆盖表里
+-  // 已有、且在自己扫描结果里存在（`canEmitCandidate`）的技能发出候选，`get()` 还会在
+-  // 加载时重新扫描校验一遍。所以"我们自己供给的也算数"不会掩盖任何真实差异：
+-  // 一条技能只要能落到模型手里，它就没有"收不到"。
+   const real = new Map()
+   const overlaid = new Set()
+   for (const skill of Array.isArray(registrySkills) ? registrySkills : []) {
+@@ -52,46 +18,50 @@ export function compareWithRegistry(catalog, registrySkills) {
+     real.set(skill.name, skill)
+     if (skill.provider === OVERLAY_PROVIDER) overlaid.add(skill.name)
+   }
+-
+   const ours = new Map()
+   for (const record of catalog?.skills ?? []) {
+-    // 只有胜出且真的能加载的才算数 —— 被遮蔽的与加载失败的本就不该出现在界面上。
+-    // 顺带跳过 null/非对象：比对是诊断用的，不该因为一条坏数据把 `/registry` 和日志一起打挂。
+-    if (!record || typeof record !== 'object') continue
+-    if (!record.winner || record.loadable === false) continue
+-    if (typeof record.name !== 'string') continue
++    if (!record || !record.winner || record.loadable === false || typeof record.name !== 'string') continue
+     ours.set(record.name, record)
+   }
+-
+-  const missing = []
+-  for (const name of ours.keys()) if (!real.has(name)) missing.push(name)
+-  const extra = []
+-  for (const name of real.keys()) if (!ours.has(name)) extra.push(name)
+-
++  const missing = [...ours.keys()].filter(name => !real.has(name)).sort()
++  const extra = [...real.keys()].filter(name => !ours.has(name)).sort()
++  const policyMismatches = []
++  const sourceMismatches = []
++  let checkedPolicies = 0
++  for (const [name, record] of ours) {
++    const actual = real.get(name)
++    if (!actual) continue
++    const pairs = [
++      [record.effectiveModelInvocable ?? record.invocation?.modelInvocable ?? record.modelInvocable, actual.invocation?.modelInvocable ?? actual.modelInvocable],
++      [record.effectiveUserInvocable ?? record.invocation?.userInvocable ?? record.userInvocable, actual.invocation?.userInvocable ?? actual.userInvocable],
++    ].filter(([left, right]) => typeof left === 'boolean' && typeof right === 'boolean')
++    if (pairs.length > 0) checkedPolicies++
++    if (pairs.some(([left, right]) => left !== right)) policyMismatches.push(name)
++    // overlay 合法接管会改变 provider，但 source/真实文档身份不应因此改变。
++    const sourceDiffers = typeof record.source === 'string' && typeof actual.source === 'string' && record.source !== actual.source
++    const expectedPath = record.docPath ?? record.path
++    const actualPath = actual.docPath ?? actual.path
++    const pathDiffers = typeof expectedPath === 'string' && typeof actualPath === 'string' && pathIdentity(expectedPath) !== pathIdentity(actualPath)
++    if (sourceDiffers || pathDiffers) sourceMismatches.push(name)
++  }
+   return {
+-    provider: FILESYSTEM_PROVIDER,
+-    ours: ours.size,
+-    registry: real.size,
+-    // 有多少条是被本插件的覆盖层接管的。它不影响结论，但能解释"为什么这几条不来自
+-    // 文件系统提供方"，免得看的人以为出了问题。
+-    overlaid: overlaid.size,
+-    // 只多报与只少报都要单独说清楚：两者的成因与处理方式完全不同。
+-    missing: missing.sort(),
+-    extra: extra.sort(),
+-    consistent: missing.length === 0 && extra.length === 0,
++    provider: FILESYSTEM_PROVIDER, ours: ours.size, registry: real.size, overlaid: overlaid.size,
++    missing, extra, policyMismatches: policyMismatches.sort(), sourceMismatches: sourceMismatches.sort(), checkedPolicies,
++    consistent: missing.length === 0 && extra.length === 0 && policyMismatches.length === 0 && sourceMismatches.length === 0,
+   }
+ }
+ 
+-/**
+- * 把比对结果说成一句人话。
+- * @param {object} result - `compareWithRegistry` 的结果
+- * @returns {string} 描述
+- */
++/** @param {object} result - 核对结果 @returns {string} 有限证据下的结论 */
+ export function describeDivergence(result) {
+-  const overlaidNote = result.overlaid > 0 ? `，其中 ${result.overlaid} 条由本插件的覆盖层接管` : ''
+-  if (result.consistent) return `与 DSH 实际解析一致（${result.ours} 条${overlaidNote}）`
++  const overlaid = result.overlaid > 0 ? `，其中 ${result.overlaid} 条由本插件的覆盖层接管` : ''
++  if (result.consistent) {
++    const label = result.checkedPolicies > 0 ? '与 DSH 实际解析一致' : '与 DSH 技能名称集合一致'
++    return `${label}（${result.ours} 条${overlaid}）`
++  }
+   const parts = []
+   if (result.missing.length > 0) parts.push(`本插件多报了 ${result.missing.length} 条（DSH 里没有）：${result.missing.join('、')}`)
+   if (result.extra.length > 0) parts.push(`本插件少报了 ${result.extra.length} 条（DSH 里有）：${result.extra.join('、')}`)
++  if (result.policyMismatches?.length > 0) parts.push(`调用策略不一致：${result.policyMismatches.join('、')}`)
++  if (result.sourceMismatches?.length > 0) parts.push(`技能来源不一致：${result.sourceMismatches.join('、')}`)
+   return parts.join('；')
+ }
+diff --git a/lib/operations.js b/lib/operations.js
+index a7cd323..03dd5e3 100644
+--- a/lib/operations.js
++++ b/lib/operations.js
+@@ -12,11 +12,13 @@
+  *     注册表会丢弃的样子，是这类工具最伤人的失败。
+  */
+ 
+-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
++import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+ import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+ 
+ import { buildSkillDocument, isSkillName, normalizeSkillName, readSkillDocument } from './frontmatter.js'
+-import { readZip } from './zip.js'
++import { readZip, safeEntryPath } from './zip.js'
++import { buildCatalog } from './catalog.js'
++import { pathIdentity } from './roots.js'
+ 
+ /** 单个导入文件与整包的大小上限，避免一次导入把内存吃光。 */
+ const MAX_IMPORT_FILE_BYTES = 32 << 20
+@@ -41,10 +43,33 @@ function fail(code, error, extra) {
+  * @returns {boolean} 是否在根内
+  */
+ export function within(rootPath, target) {
++  if (typeof rootPath !== 'string' || typeof target !== 'string') return false
++  const nested = (root, full) => {
++    if (process.platform === 'win32') { root = root.toLowerCase(); full = full.toLowerCase() }
++    return full !== root && full.startsWith(root.endsWith(sep) ? root : root + sep)
++  }
+   const root = resolve(rootPath)
+   const full = resolve(target)
+-  if (full === root) return false
+-  return full.startsWith(root.endsWith(sep) ? root : root + sep)
++  if (!nested(root, full)) return false
++  try {
++    return nested(canonicalDestination(root), canonicalDestination(full))
++  } catch {
++    // 拒绝损坏的链接、权限不足和非目录父项，不能把解析失败当作普通新文件。
++    return false
++  }
++}
++
++/**
++ * 解析实际落盘位置；目标未创建时从最近存在的祖先推导。
++ * lstat 先检查链接自身，避免把悬空链接当作不存在的普通文件。
++ * @param {string} path - 绝对路径
++ * @returns {string} 解析链接后的目标
++ */
++function canonicalDestination(path) {
++  if (lstatSync(path, { throwIfNoEntry: false })) return realpathSync.native(path)
++  const parent = dirname(path)
++  if (parent === path) throw new Error('路径没有可解析的祖先')
++  return join(canonicalDestination(parent), basename(path))
+ }
+ 
+ /**
+@@ -64,8 +89,14 @@ export function createSkill(input) {
+   const dir = join(root.path, name)
+   const docPath = join(dir, 'SKILL.md')
+   if (!within(root.path, docPath)) return fail('path.escape', '目标路径越出了根目录')
++  const namesakes = buildCatalog({ roots: [root] }).skills.filter(skill => skill.name === name)
++  // create 不得因目录名不同而悄悄增加第二条同名技能；跨形态替换交给原子导入。
++  if (namesakes.length > 0 && (!input.overwrite || namesakes.some(skill => pathIdentity(skill.docPath) !== pathIdentity(docPath)))) {
++    return fail('skill.exists', `技能 ${name} 已存在：${namesakes.map(skill => skill.docPath).join('、')}`)
++  }
+   if (existsSync(dir) && !input.overwrite) return fail('skill.exists', `技能 ${name} 已存在：${docPath}`)
+ 
++
+   const content = buildSkillDocument({ name, description, whenToUse: input.whenToUse, body: input.body })
+   const parsed = readSkillDocument(content)
+   if (!parsed.loadable) return fail('document.invalid', '生成的文档未通过校验', { diagnostics: parsed.diagnostics })
+@@ -80,11 +111,13 @@ export function createSkill(input) {
+  *
+  * 刻意不做「只改某几行」的增量写：整份替换的语义是用户可以理解和验证的，
+  * 而按行修补会在遇到块标量、注释、CRLF 时产出用户没写过的内容。
+- * @param {{ docPath: string, rootPath: string, content: string }} input - 编辑参数
++ * @param {{ docPath: string, root: object, content: string }} input - 编辑参数；完整根对象携带只读能力
+  * @returns {object} 结果
+  */
+ export function writeSkillContent(input) {
+-  if (!within(input.rootPath, input.docPath)) return fail('path.escape', '目标路径越出了根目录')
++  if (!input.root || typeof input.root.path !== 'string') return fail('root.unknown', '保存需要完整的技能根定义')
++  if (input.root.mutable === false) return fail('root.readOnly', '只读根目录不能修改技能')
++  if (!within(input.root.path, input.docPath)) return fail('path.escape', '目标路径越出了根目录')
+   if (!existsSync(input.docPath)) return fail('skill.missing', '技能文件已不存在')
+   const content = typeof input.content === 'string' ? input.content : ''
+   if (content.length > MAX_IMPORT_FILE_BYTES) return fail('content.tooLarge', '内容过大')
+@@ -153,21 +186,84 @@ export function importFiles(input) {
+   const name = parsed.name
+   const dir = join(root.path, name)
+   if (!within(root.path, dir)) return fail('path.escape', '目标路径越出了根目录')
+-  if (existsSync(dir) && !input.overwrite) return fail('skill.exists', `技能 ${name} 已存在，请先删除或选择覆盖`)
++  const namesakes = buildCatalog({ roots: [root] }).skills.filter(skill => skill.name === name)
++  if (namesakes.length > 1) return fail('skill.ambiguous', `技能 ${name} 已存在于多个文档，请先选择并删除多余项`)
++  const original = namesakes[0]
++  const originalPath = original ? (original.kind === 'bundle' ? dirname(original.docPath) : original.docPath) : undefined
++  if (original && !input.overwrite) return fail('skill.exists', `技能 ${name} 已存在，请先删除或选择覆盖`)
++  if (originalPath && !within(root.path, originalPath)) return fail('path.escape', '原技能实际路径越出了根目录')
++  // 规范化目录若被另一技能或未识别的目录占用，不能以 overwrite 名义顺带删除它。
++  if (existsSync(dir) && (!originalPath || pathIdentity(originalPath) !== pathIdentity(dir))) {
++    return fail('skill.exists', `规范化目标目录已被其它内容占用：${dir}`)
++  }
+ 
+-  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
+-  mkdirSync(dir, { recursive: true })
++  // 先规划全部条目，绝不在校验中途删除已有包。
++  const plan = []
++  const destinations = new Set()
+   for (const file of files) {
+-    const rel = bundleRoot ? file.name.slice(bundleRoot.length).replace(/^\/+/, '') : file.name
+-    // 文档统一落成 SKILL.md：注册表只认这个文件名，保留原名会让导入看起来成功却没生效。
+-    const targetRel = rel === doc.name.slice(bundleRoot.length).replace(/^\/+/, '') ? 'SKILL.md' : rel
+-    if (!targetRel) continue
+-    const target = join(dir, targetRel)
+-    if (!within(dir, target)) return fail('path.escape', `条目 ${file.name} 越出了技能目录`)
+-    mkdirSync(dirname(target), { recursive: true })
+-    writeFileSync(target, file.data)
++    if (bundleRoot && !file.name.startsWith(bundleRoot)) continue
++    const rel = file === doc ? 'SKILL.md' : file.name.slice(bundleRoot.length)
++    const normalized = safeEntryPath(rel)
++    // NTFS 的 : 数据流与默认流别名不是独立附件，不能绕过主文档的校验。
++    if (!normalized || rel.includes(':') || /^[\\/]/.test(rel) || !within(dir, join(dir, normalized))) {
++      return fail('path.escape', `条目 ${file.name} 不是安全的技能内相对路径`)
++    }
++    const identity = process.platform === 'win32' ? normalized.toLowerCase() : normalized
++    if (destinations.has(identity)) return fail('import.duplicatePath', `多个条目写入同一文件：${normalized}`)
++    destinations.add(identity)
++    plan.push({ relative: normalized, data: file.data })
++  }
++
++  let workspace
++  let movedOriginal = false
++  let committed = false
++  let retainRecovery = false
++  let result
++  try {
++    mkdirSync(root.path, { recursive: true })
++    workspace = mkdtempSync(join(root.path, '.dshsm-import-'))
++    const staged = join(workspace, 'bundle')
++    const backup = join(workspace, 'backup')
++    mkdirSync(staged)
++    for (const file of plan) {
++      const target = join(staged, file.relative)
++      mkdirSync(dirname(target), { recursive: true })
++      writeFileSync(target, file.data)
++    }
++    // 同卷提交：暂存完整包之后才移动原包，提交失败则恢复原目录。
++    if (existsSync(dir) && (!originalPath || pathIdentity(originalPath) !== pathIdentity(dir))) {
++      throw new Error('规范化目标在导入期间被其它内容占用')
++    }
++    if (originalPath) {
++      if (!existsSync(originalPath) || !within(root.path, originalPath)) throw new Error('原技能实际路径在导入期间发生变化')
++      // 原技能可能是 flat 文件或采用其它目录名的 bundle，均只替换这个唯一实体。
++      renameSync(originalPath, backup)
++      movedOriginal = true
++    }
++    renameSync(staged, dir)
++    committed = true
++    result = { ok: true, name, path: join(dir, 'SKILL.md'), rootKey: root.key, files: plan.length }
++  } catch (error) {
++    result = fail('import.writeFailed', `导入未完成：${error instanceof Error ? error.message : String(error)}`)
++    if (movedOriginal && !committed) {
++      const backup = join(workspace, 'backup')
++      try {
++        renameSync(backup, originalPath)
++      } catch (rollbackError) {
++        // 回滚也失败时保住原包，绝不能在清理阶段把仅剩的备份删掉。
++        retainRecovery = true
++        result.recoveryPath = backup
++        result.error += `；原包保留在 ${backup}，自动恢复失败：${String(rollbackError)}`
++      }
++    }
++  }
++  if (workspace && !retainRecovery) {
++    try { rmSync(workspace, { recursive: true, force: true }) } catch (error) {
++      result.cleanupPath = workspace
++      result.warning = `暂存清理失败，未删除恢复材料：${String(error)}`
++    }
+   }
+-  return { ok: true, name, path: join(dir, 'SKILL.md'), rootKey: root.key, files: files.length }
++  return result
+ }
+ 
+ /**
+diff --git a/lib/roots.js b/lib/roots.js
+index 9b5468e..8ca5d1e 100644
+--- a/lib/roots.js
++++ b/lib/roots.js
+@@ -126,11 +126,11 @@ export function listRoots(options = {}) {
+     })
+   }
+ 
+-  for (const [index, dir] of normalizeCustomDirs(config.customSkillDirs).entries()) {
++  for (const dir of normalizeCustomDirs(config.customSkillDirs)) {
+     push({
+-      key: `custom-${index}`,
++      key: `custom@${pathIdentity(dir)}`,
+       source: 'custom',
+-      rank: RANK.custom + index,
++      rank: RANK.custom,
+       path: resolve(dir),
+       scope: 'user',
+       mutable: true,
+@@ -190,6 +190,8 @@ export function scanRoot(root) {
+     return { entries, diagnostics }
+   }
+ 
++  // 原生提供方按完整目录项名排序，不能先去掉 .md 再排序。
++  dirents.sort((a, b) => a.name.localeCompare(b.name))
+   for (const dirent of dirents) {
+     const entryName = dirent.name
+     // 隐藏项一律跳过：`.system`（DSH 内置技能存放处）必须不可见，其余点目录也不该是技能。
+@@ -205,7 +207,6 @@ export function scanRoot(root) {
+     entries.push({ entryName: entryName.replace(/\.md$/i, ''), kind: 'flat', docPath: entryPath })
+   }
+ 
+-  entries.sort((a, b) => a.entryName.localeCompare(b.entryName))
+   return { entries, diagnostics }
+ }
+ 
+@@ -221,8 +222,9 @@ export function scanRoot(root) {
+ export function normalizeRootKey(value) {
+   if (typeof value !== 'string') return ''
+   const key = value.trim()
+-  if (!key || key.length > 512) return ''
+-  return /^[A-Za-z0-9@._:/\\-]+$/.test(key) ? key : ''
++  if (!key || key.length > 4096) return ''
++  // key 包含真实路径，中文和空格合法；授权仍由 rootsFor 查表负责。
++  return /[\u0000-\u001f\u007f]/u.test(key) ? '' : key
+ }
+ 
+ /**
+diff --git a/lib/routes.js b/lib/routes.js
+index 10ecb37..048a826 100644
+--- a/lib/routes.js
++++ b/lib/routes.js
+@@ -14,7 +14,8 @@
+ 
+ import { readFileSync } from 'node:fs'
+ 
+-import { normalizeRootKey } from './roots.js'
++import { normalizeRootKey, pathIdentity } from './roots.js'
++import { findCatalogDocument } from './catalog.js'
+ import { compareWithRegistry } from './divergence.js'
+ import { agentCwd, agentScopeView, summarizeSnapshot } from './scope.js'
+ import { logPath } from './store.js'
+@@ -139,7 +140,7 @@ async function handle(req, res, runtime, trustedHosts, ctx) {
+     if (req.method === 'GET' && path === `${ROUTE_PREFIX}/catalog`) return json(res, 200, catalogResponse(runtime, cwd, candidates))
+     if (req.method === 'GET' && path === `${ROUTE_PREFIX}/registry`) return json(res, 200, await registryResponse(runtime, cwd, ctx))
+     if (req.method === 'GET' && path === `${ROUTE_PREFIX}/skill/content`) {
+-      return json(res, 200, readContent(runtime, cwd, url.searchParams.get('rootKey'), url.searchParams.get('name')))
++      return json(res, 200, readContent(runtime, cwd, url.searchParams.get('rootKey'), url.searchParams.get('name'), url.searchParams.get('docPath')))
+     }
+     if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'method.notAllowed', error: '只支持 GET 与 POST' })
+     const body = await readJson(req)
+@@ -170,17 +171,19 @@ function dispatch(path, body, runtime, cwd, candidates) {
+       return finish(createSkill({ root: lookup.root, name: body.name, description: body.description, whenToUse: body.whenToUse, body: body.body }))
+     case `${ROUTE_PREFIX}/skill/save`: {
+       if (!lookup.ok) return lookup
+-      const skill = findSkill(runtime, cwd, body.rootKey, body.name)
++      const skill = findSkill(runtime, cwd, body.rootKey, body.name, body.docPath)
+       if (!skill.ok) return skill
+-      return finish(writeSkillContent({ docPath: skill.skill.docPath, rootPath: lookup.root.path, content: body.content }))
++      return finish(writeSkillContent({ docPath: skill.skill.docPath, root: lookup.root, content: body.content }))
+     }
+     case `${ROUTE_PREFIX}/skill/delete`: {
+       if (!lookup.ok) return lookup
+-      const skill = findSkill(runtime, cwd, body.rootKey, body.name)
++      const skill = findSkill(runtime, cwd, body.rootKey, body.name, body.docPath)
+       if (!skill.ok) return skill
+       const result = deleteSkill({ root: lookup.root, skill: skill.skill })
+       // 删掉的技能要连它的启停覆盖一起清掉，否则同名技能以后被重建时会莫名其妙是停用状态。
+-      if (result.ok) runtime.setEnabled({ rootKey: body.rootKey, name: body.name, enabled: null, cwd })
++      if (result.ok && !runtime.catalogFor(cwd).skills.some(record => record.rootKey === skill.skill.rootKey && record.name === skill.skill.name)) {
++        runtime.setEnabled({ rootKey: skill.skill.rootKey, name: skill.skill.name, enabled: null, cwd })
++      }
+       return finish(result)
+     }
+     case `${ROUTE_PREFIX}/skill/import`:
+@@ -225,8 +228,8 @@ function importInto(root, body) {
+  * @param {string|null} name - 技能名
+  * @returns {object} 响应体
+  */
+-function readContent(runtime, cwd, rootKey, name) {
+-  const found = findSkill(runtime, cwd, rootKey, name)
++function readContent(runtime, cwd, rootKey, name, docPath) {
++  const found = findSkill(runtime, cwd, rootKey, name, docPath)
+   if (!found.ok) return found
+   let text
+   try {
+@@ -314,25 +317,33 @@ async function registryResponse(runtime, cwd, ctx) {
+   }
+ 
+   const host = summarizeSnapshot(await skills.snapshot({ cwd: resolve }))
+-  const effective = perAgent.find((item) => Array.isArray(item.skills))
++  // 只能为所选 cwd 核对，未知 cwd 或另一个项目的 agent 都不能充当该视图。
++  const effective = perAgent.find((item) => {
++    const ownCwd = agentCwd(item.agent)
++    return Array.isArray(item.skills) && ownCwd !== undefined && pathIdentity(ownCwd) === pathIdentity(resolve)
++  })
+   // 只有真的读到了某个 agent 的那一层，比对才有意义 —— 否则是在拿"宿主层的空结果"和
+   // 我们的目录比，只会得到一堆假差异。
+   const comparedCwd = effective ? (agentCwd(effective.agent) ?? resolve) : undefined
+   let divergence
+-  if (effective) {
++  if (effective && effective.complete !== false) {
+     try {
+       divergence = { checked: true, cwd: comparedCwd, ...compareWithRegistry(runtime.catalogFor(comparedCwd), effective.skills) }
+     } catch (error) {
+       divergence = { checked: false, reason: error instanceof Error ? error.message : String(error) }
+     }
+   } else {
+-    divergence = { checked: false, reason: '当前没有可用的 agent 视图，拿宿主层去比只会得到假差异' }
++    divergence = { checked: false, cwd: resolve, reason: effective
++      ? '匹配 agent 的目录观测不完整，不能据此宣称核对一致'
++      : '当前没有与所选项目目录匹配的可用 agent 视图，不使用其它项目冒充核对' }
+   }
+   return {
+     ok: true,
+     data: {
+       // `skills` 是**当前最能代表会话实际所见**的那一份；没有可用 agent 视图时退回宿主层，
+       // 并且把 `scope` 与 `agents[].reason` 一并交代清楚，不假装读到的是会话视图。
++      cwd: resolve,
++      agentId: effective?.id ?? null,
+       scope: effective ? 'agent' : 'host',
+       complete: effective ? effective.complete : host.complete,
+       skills: effective ? effective.skills : host.skills,
+@@ -340,6 +351,7 @@ async function registryResponse(runtime, cwd, ctx) {
+       divergence,
+       agents: perAgent.map((item) => ({
+         id: item.id,
++        cwd: agentCwd(item.agent),
+         count: Array.isArray(item.skills) ? item.skills.length : null,
+         reason: item.reason,
+       })),
+@@ -370,16 +382,10 @@ function resolveTarget(runtime, cwd, rootKey) {
+  * @param {unknown} name - 技能名
+  * @returns {{ ok: true, skill: object } | object} 结果
+  */
+-function findSkill(runtime, cwd, rootKey, name) {
+-  if (typeof name !== 'string' || !name) return { ok: false, code: 'skill.invalid', error: '缺少技能名' }
+-  const catalog = runtime.catalogFor(cwd)
+-  const winner = catalog.winners.get(name)
+-  if (!winner) return { ok: false, code: 'skill.unknown', error: `找不到名为 ${name} 的技能` }
+-  if (winner.rootKey !== rootKey) {
+-    return { ok: false, code: 'skill.shadowed', error: `${name} 实际由 ${winner.source} 下的同名技能生效，请改为操作它` }
+-  }
+-  if (winner.overrideShadowed) return { ok: false, code: 'skill.shadowed', error: `${name} 的覆盖被同名技能遮蔽` }
+-  return { ok: true, skill: winner }
++function findSkill(runtime, cwd, rootKey, name, docPath) {
++  const target = resolveTarget(runtime, cwd, rootKey)
++  if (!target.ok) return target
++  return findCatalogDocument(runtime.catalogFor(cwd), { rootKey: target.root.key, name, docPath })
+ }
+ 
+ /**
+@@ -391,6 +397,7 @@ function findSkill(runtime, cwd, rootKey, name) {
+  */
+ function withCatalog(runtime, cwd, result, candidates) {
+   if (!result || result.ok !== true) return result ?? { ok: false, code: 'internal', error: '操作没有返回结果' }
++  runtime.invalidate()
+   return { ...result, catalog: catalogResponse(runtime, cwd, candidates).data }
+ }
+ 
+diff --git a/lib/tools.js b/lib/tools.js
+index 7d33604..4966e7e 100644
+--- a/lib/tools.js
++++ b/lib/tools.js
+@@ -11,6 +11,7 @@
+  */
+ 
+ import { readFileSync } from 'node:fs'
++import { findCatalogDocument } from './catalog.js'
+ 
+ import { buildSkillDocument, readSkillDocument } from './frontmatter.js'
+ import { createSkill, deleteSkill, importDirectory, importMarkdown, importZip, writeSkillContent } from './operations.js'
+@@ -127,8 +128,9 @@ export const TOOLS = [
+     parameters: { type: 'object', properties: { name: { type: 'string', description: 'Exact kebab-case skill name.' }, cwd: { type: 'string' } }, required: ['name'], additionalProperties: false },
+     async run(args, runtime) {
+       const catalog = runtime.catalogFor(args.cwd)
+-      const winner = catalog.winners.get(args.name)
+-      if (!winner) return { ok: false, error: `找不到名为 ${args.name} 的技能` }
++      const found = findCatalogDocument(catalog, { name: args.name })
++      if (!found.ok) return found
++      const winner = found.skill
+       const text = readFileSync(winner.docPath, 'utf8')
+       return {
+         ok: true,
+@@ -225,12 +227,13 @@ export const TOOLS = [
+     present: (args) => args.name,
+     async run(args, runtime) {
+       const catalog = runtime.catalogFor(args.cwd)
+-      const winner = catalog.winners.get(args.name)
+-      if (!winner) return { ok: false, error: `找不到名为 ${args.name} 的技能` }
++      const found = findCatalogDocument(catalog, { name: args.name })
++      if (!found.ok) return found
++      const winner = found.skill
+       const root = runtime.rootsFor(args.cwd).find((item) => item.key === winner.rootKey)
+       if (!root) return { ok: false, error: '技能所属的根目录当前不可用' }
+       if (root.mutable === false) return { ok: false, error: `${root.source} 是只读根目录，不能修改` }
+-      const result = writeSkillContent({ docPath: winner.docPath, rootPath: root.path, content: args.content })
++      const result = writeSkillContent({ docPath: winner.docPath, root, content: args.content })
+       if (result.ok) runtime.invalidate()
+       return result
+     },
+@@ -245,13 +248,16 @@ export const TOOLS = [
+     present: (args) => args.name,
+     async run(args, runtime) {
+       const catalog = runtime.catalogFor(args.cwd)
+-      const winner = catalog.winners.get(args.name)
+-      if (!winner) return { ok: false, error: `找不到名为 ${args.name} 的技能` }
++      const found = findCatalogDocument(catalog, { name: args.name })
++      if (!found.ok) return found
++      const winner = found.skill
+       const root = runtime.rootsFor(args.cwd).find((item) => item.key === winner.rootKey)
+       if (!root) return { ok: false, error: '技能所属的根目录当前不可用' }
+       const result = deleteSkill({ root, skill: winner })
+       if (result.ok) {
+-        runtime.setEnabled({ rootKey: winner.rootKey, name: args.name, enabled: null, cwd: args.cwd })
++        if (!runtime.catalogFor(args.cwd).skills.some(record => record.rootKey === winner.rootKey && record.name === winner.name)) {
++          runtime.setEnabled({ rootKey: winner.rootKey, name: winner.name, enabled: null, cwd: args.cwd })
++        }
+         runtime.invalidate()
+       }
+       return result

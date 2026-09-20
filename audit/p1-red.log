@@ -1,0 +1,131 @@
+✖ HTTP 保存不能绕过 bundled 根的只读限制 (13.0773ms)
+✖ HTTP 保存不能沿文档符号链接写到根外 (7.6775ms)
+✖ 新建不能穿过指向根外的目录链接 (3.3632ms)
+✖ 写盘失败不发布内存策略，排除障碍后同参数重试会真正保存 (6.545ms)
+✖ 清除覆盖写盘失败也不提前清空内存状态 (7.8087ms)
+✖ 覆盖 ZIP 写入中途失败时保留原文档及全部附件 (8.6163ms)
+✔ 成功覆盖导入替换整个包并保留新附件 (4.4078ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 1
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 260.6838
+
+✖ failing tests:
+
+test at test\mutation-safety.test.mjs:31:1
+✖ HTTP 保存不能绕过 bundled 根的只读限制 (13.0773ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/mutation-safety.test.mjs:37:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\mutation-safety.test.mjs:43:1
+✖ HTTP 保存不能沿文档符号链接写到根外 (7.6775ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/mutation-safety.test.mjs:55:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\mutation-safety.test.mjs:61:1
+✖ 新建不能穿过指向根外的目录链接 (3.3632ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/mutation-safety.test.mjs:71:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\mutation-safety.test.mjs:77:1
+✖ 写盘失败不发布内存策略，排除障碍后同参数重试会真正保存 (6.545ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/mutation-safety.test.mjs:86:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\mutation-safety.test.mjs:97:1
+✖ 清除覆盖写盘失败也不提前清空内存状态 (7.8087ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/mutation-safety.test.mjs:107:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test\mutation-safety.test.mjs:115:1
+✖ 覆盖 ZIP 写入中途失败时保留原文档及全部附件 (8.6163ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '---\nname: demo\ndescription: Safe fixture\n---\nOriginal body\nReplacement'
+  - '---\nname: demo\ndescription: Safe fixture\n---\nOriginal body\n'
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/mutation-safety.test.mjs:127:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '---\nname: demo\ndescription: Safe fixture\n---\nOriginal body\nReplacement',
+    expected: '---\nname: demo\ndescription: Safe fixture\n---\nOriginal body\n',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

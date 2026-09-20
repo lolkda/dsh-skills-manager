@@ -48,8 +48,9 @@ test('listRoots 把 customSkillDirs 排在项目根之后、用户根之前', ()
   const custom = roots.filter((r) => r.source === 'custom')
   assert.deepEqual(custom.map((r) => r.path.replace(/\\/g, '/')), ['F:/extra/one', 'F:/extra/two'])
   assert.ok(custom[0].rank > RANK.projectAgents && custom[0].rank < RANK.userDsh)
-  assert.equal(custom[0].key, 'custom-0')
-  assert.equal(custom[1].key, 'custom-1')
+  assert.equal(custom[0].key, `custom@${pathIdentity('F:/extra/one')}`)
+  assert.equal(custom[1].key, `custom@${pathIdentity('F:/extra/two')}`)
+  assert.deepEqual(custom.map(root => root.rank), [RANK.custom, RANK.custom])
 })
 
 test('listRoots 的 includeDefaultRoots=false 只剩自定义根', () => {

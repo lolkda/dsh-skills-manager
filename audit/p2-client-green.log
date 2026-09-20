@@ -1,0 +1,54 @@
+✔ P2：切换项目必须清理旧项目的 root 过滤器 (174.5993ms)
+✔ P2：启停失败信息不会被后续成功的 GET 清掉 (57.7172ms)
+✔ P2：删除失败保留错误和详情，不伪装成删除成功 (169.7882ms)
+✔ P2：读取编辑正文的网络错误可见且不产生未处理拒绝 (105.0553ms)
+✔ P2：上传读取失败时解除 busy，用户可取消并重试 (125.5934ms)
+✔ P2：不可加载技能可展开诊断和编辑，不误称为同名遮蔽 (121.186ms)
+✔ P2：损坏技能的详情不能宣称当前模型可用 (94.3068ms)
+✔ P2：同名但调用策略不同必须显示红色核对结果 (29.2984ms)
+✔ P2：无法安全迁移的旧 custom 覆盖必须显示全局警告 (32.6358ms)
+✔ P2：慢的旧项目响应不能覆盖后来选择的项目 (9174.1666ms)
+✔ 挂载时拉取目录，并把技能、来源与状态渲染出来 (57.1586ms)
+✔ 点击开关发出精确的策略请求，并重新拉取目录 (43.8555ms)
+✔ 接口报错时把错误显示出来，而不是白屏 (40.8982ms)
+✔ 被遮蔽的技能不当作生效项，且开关被禁用 (31.9361ms)
+✔ 没有标签页，也没有搜索框 —— 面板直接就是技能列表 (29.6875ms)
+✔ 被 DSH 丢弃的技能显示「不可加载」并禁用开关 (29.8563ms)
+✔ 显示项目根是按哪个目录解析的 (30.4592ms)
+✔ 钉住 cwd：首次拿到后用 ?cwd= 显式带回 (63.0456ms)
+✔ 有多个候选目录时给出选择器，切换后按新目录重新解析 (119.7475ms)
+✔ 与 DSH 实际解析一致时给出经实测的确认 (34.2325ms)
+✔ 核对出多报/少报时点名列出，而不是含糊其辞 (27.1784ms)
+✔ 读不到注册表时不编造一致结论 (32.2025ms)
+✖ 没有可用 agent 视图时不假装核对过 (51.3853ms)
+✔ 客户端 bundle 只请求 react，且返回 { name, inject, apply } (8.6288ms)
+✔ 客户端把技能分区注册进 settings.section (2.8621ms)
+✔ 客户端注入样式表，并在卸载时移除 (1.8333ms)
+✔ 注册进 slots 的渲染函数包在错误边界里 (5.8427ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 26
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10244.4744
+
+✖ failing tests:
+
+test at test\client-render.test.mjs:292:1
+✖ 没有可用 agent 视图时不假装核对过 (51.3853ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///F:/project/dsh-skills-manager/test/client-render.test.mjs:299:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
