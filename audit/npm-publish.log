@@ -1,0 +1,35 @@
+npm notice
+npm notice 📦  @lolkda/dsh-skills-manager@0.2.0
+npm notice Tarball Contents
+npm notice 1.1kB LICENSE
+npm notice 12.7kB README.md
+npm notice 53.4kB client/client.js
+npm notice 1.2kB cordis.patch.yml
+npm notice 11.8kB lib/catalog.js
+npm notice 3.9kB lib/divergence.js
+npm notice 15.7kB lib/frontmatter.js
+npm notice 18.8kB lib/index.js
+npm notice 18.4kB lib/operations.js
+npm notice 7.4kB lib/provider.js
+npm notice 9.3kB lib/roots.js
+npm notice 21.1kB lib/routes.js
+npm notice 4.5kB lib/scope.js
+npm notice 8.8kB lib/store.js
+npm notice 14.3kB lib/tools.js
+npm notice 6.1kB lib/zip.js
+npm notice 2.2kB package.json
+npm notice 3.9kB scripts/migrate-external-skills.mjs
+npm notice Tarball Details
+npm notice name: @lolkda/dsh-skills-manager
+npm notice version: 0.2.0
+npm notice filename: lolkda-dsh-skills-manager-0.2.0.tgz
+npm notice package size: 71.2 kB
+npm notice unpacked size: 214.5 kB
+npm notice shasum: 2fc8e96fe9733d8bc6967e381ba8a01e9d3176b9
+npm notice integrity: sha512-n5RZVlcjtWmLX[...]Hej/xbWP7Kspw==
+npm notice total files: 18
+npm notice
+npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access
+npm notice Your package is being processed and may take a few minutes to become available.
++ @lolkda/dsh-skills-manager@0.2.0
+publish_exit=0

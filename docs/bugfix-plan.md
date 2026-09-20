@@ -79,3 +79,48 @@ body
 - 重跑正式验收：`npm run check`。
 - 单独观察暂缓项：`node --test --test-name-pattern="R21:" audit/regressions.mjs`，当前仍应以正文差异断言失败。
 
+## 发布与部署记录（0.2.0）
+
+- 提交 `6c1e1f0` 已推送到 `origin/master`（GitHub: lolkda/dsh-skills-manager），标签 `v0.2.0` 已推送。
+- npm 已发布 `@lolkda/dsh-skills-manager@0.2.0`（`latest`），18 个文件、71.2 kB；发布日志见 [npm-publish.log](F:/project/dsh-skills-manager/audit/npm-publish.log)。包内容由 `files` 白名单限制，`audit/`、`test/`、`docs/`、`spike/` 均不进入 npm 包。
+- 0.2.0 相对 0.1.0 新增直接依赖 `yaml@^2.4.2`（metadata 保真用）。安装方必须让它一起装上，否则插件在启动期解析 `import 'yaml'` 就会失败。
+
+### 升级过程中的一次事故（已修复）
+
+`dsh plugin --profile web add @lolkda/dsh-skills-manager@latest` 在**运行中的实例**上执行失败：
+
+```
+ERR_PNPM_PACKAGE_MANAGER_REMOVE_MODULES_DIR
+Failed to remove modules directory contents: 拒绝访问。 (os error 5)
+```
+
+原因是 pnpm 判定现有 `node_modules` 不可接管，于是先清空再安装，而运行中的 DSH 进程锁住了已加载插件的文件，删除到一半即中止。结果是 profile 的 `node_modules` 被删掉了 `@lolkda/*`（三个）、`@deepseek-ai/cosmokit`、`@deepseek-ai/schemastery`、`@standard-schema/spec`、`argparse`，只剩被锁住的 `dshmarket`、`js-yaml`、`undici` 与三个 link 符号链接。运行中的实例因为代码已在内存里，表面上仍正常响应。
+
+修复方式：在一个独立暂存目录里按 lockfile 的精确版本重新解析，再把缺的包原样拷回 profile，未触碰被锁文件：
+
+- 补回版本：`@deepseek-ai/cosmokit@1.8.3`、`@deepseek-ai/schemastery@3.18.2`、`@lolkda/dsh-prompt-manager@3.2.2`、`@lolkda/dsh-skills-manager@0.2.0`、`@lolkda/dsh-web-lan@0.1.0`、`@standard-schema/spec@1.1.0`、`argparse@2.0.1`、`yaml@2.9.1`。
+- profile 的 `package.json` 依赖范围更新为 `^0.2.0`，`pnpm-workspace.yaml` 补 `minimumReleaseAgeExclude` 的 0.2.0 条目。
+- `pnpm install --lockfile-only` 重新生成 `pnpm-lock.yaml`（只写 lockfile，不动 `node_modules`），其 `integrity` 与本次发布的 tarball 完全一致：`sha512-n5RZVlcjtWmLXtJXq3Im0bfUkdvWcJChwJIR8KpoJ5MclSlEmHLPqbY/QkpvMOdEe/OtnpG5XHej/xbWP7Kspw==`。
+- 校验：profile 根下逐个 `import()` 七个包全部成功；`dsh --profile web --dump-config` 退出码 0，所有 bundle 与插件都能解析。
+- 修改前的三个清单文件备份在 `D:/Personal/Temp/dsh-profile-web-manifest-backup-20260920-161632/`。
+
+**结论：`dsh plugin` 的安装/升级必须在实例停止时执行**；运行中升级会先清空 `node_modules` 再失败。
+
+### 生效方式
+
+`dsh` 没有热重载命令，插件升级要重启 profile 进程才生效。当前 3080 上仍是内存中的 0.1.0 宿主代码（界面可用，但看不到本轮修复）。重启步骤：
+
+```powershell
+# 1. 结束当前实例（PID 55324 是本次观测到的监听进程，重启前请重新确认）
+Get-Process -Id 55324 | Stop-Process
+# 2. 重新启动 profile
+dsh web
+```
+
+重启前建议先在实例停止状态下确认依赖完整（此命令只读，不修改 `node_modules`）：
+
+```powershell
+dsh plugin --profile web list
+```
+
+

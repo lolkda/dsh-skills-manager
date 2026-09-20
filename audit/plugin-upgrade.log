@@ -1,0 +1,7 @@
+Error: ERR_PNPM_PACKAGE_MANAGER_REMOVE_MODULES_DIR
+
+  × adding a new package
+  ╰─▶ Failed to remove modules directory contents: 拒绝访问。 (os error 5)
+
+dsh: pnpm failed; diagnostics: C:\Users\Administrator\.dsh\profiles\web\.plugin-manager\logs\operation-NXynbD\pnpm.log
+upgrade_exit=1
