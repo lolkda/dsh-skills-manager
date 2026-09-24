@@ -212,6 +212,16 @@ dsh plugin --profile web add link:F:/project/dsh-skills-manager
 
 工程约定与已实测的机制细节见 `research/DESIGN.md`，真机验收证据见 `research/ACCEPTANCE.md`。
 
+## 发布
+
+推一个 `v<package.json 版本>` tag 即可，GitHub Actions 会跑测试、打包并发布到 npm：
+
+```bash
+git tag v0.2.2-rc.1 && git push origin v0.2.2-rc.1
+```
+
+正式版发到 `latest`，带 `-` 的预发布版发到 `next`，两者不会互相污染。认证走 npm Trusted Publishing（OIDC）—— **不需要任何长期 token 或仓库 secret**；一次性配置、dry-run 演练入口和实测踩到的坑见 [docs/release.md](docs/release.md)。
+
 ## 许可
 
 MIT

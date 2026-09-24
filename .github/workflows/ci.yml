@@ -1,0 +1,45 @@
+# 分支与 PR 上的测试门禁。
+#
+# 与 publish.yml 的关系：publish 只在 tag 上跑，所以「改了代码还没打 tag」这段时间没人拦；
+# 这个 workflow 补上那段。它不发任何东西，也不需要任何 secret。
+#
+# Node 版本：24 是实际开发/发布用的版本；22 是 package.json `engines` 声明的下界。
+# 22 上失败不阻塞发布（publish.yml 自己只用 24），但它说明 engines 声明与实际不符。
+
+name: CI
+
+on:
+  push:
+    # 只跟分支：tag 推上来时由 publish.yml 负责，那边自己会跑一遍同样的测试。
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 测试（Node ${{ matrix.node }}）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', '22']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      # 与 publish.yml 里同一条命令，避免两边判据分叉。
+      - run: npm run check

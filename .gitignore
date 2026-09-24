@@ -2,3 +2,4 @@ node_modules/
 *.log
 thinking-effort-loaded.json
 .npm-cache/
+dist/

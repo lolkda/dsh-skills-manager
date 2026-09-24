@@ -16,6 +16,7 @@
     "lib",
     "client",
     "scripts",
+    "!scripts/release-plan.mjs",
     "cordis.patch.yml",
     "README.md",
     "CHANGELOG.md",
@@ -79,6 +80,7 @@
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/dsh-skill": "0.1.7-rc.1",
     "@deepseek-ai/dsh-skill-filesystem": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.1",
     "@deepseek-ai/schemastery": "3.18.4"
   },
   "engines": {

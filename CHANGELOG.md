@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- GitHub Actions release pipeline: pushing a `v<version>` tag (or a manual dispatch with a dry-run option) runs the test suite, packs the tarball, and publishes it to npm. Stable versions go to `latest`, versions containing `-` go to `next`, so a prerelease can never take over `latest`.
+- Authentication uses npm Trusted Publishing (OIDC): no long-lived npm token and no repository secret. The publish job holds `id-token: write`, npm (>= 11.5.1) exchanges the GitHub id_token for a package-scoped short-lived token, and the same id_token signs the provenance attestation.
+- A preflight step fails fast when the OIDC prerequisites are missing (npm older than 11.5.1, or no `id-token: write`), and the dry-run mode asserts that credentials were actually available — a bare `npm publish --dry-run` exits 0 even with no credentials at all, which makes it useless as a rehearsal.
+- `scripts/release-plan.mjs` derives the git tag and dist-tag from `package.json` and refuses to publish when the tag does not match the version or when the ref is not a tag. Covered by `test/release-plan.test.mjs`.
+- `ci.yml` runs the same `npm run check` on branches and pull requests, on Node 24 and Node 22 (`engines` lower bound).
+
+### Fixed
+
+- Add the missing `@deepseek-ai/dsh-tools` dev dependency. `test/tools.test.mjs` imports it for the JSON Schema subset assertions, so without it that file failed at import and the suite could not be green on a clean checkout: 189 passing / 1 failing before, 196 passing / 0 failing after.
+
+### Notes
+
+- Release procedure, the one-time Trusted Publisher registration on npmjs.com, and the pitfalls found while testing this locally: [docs/release.md](https://github.com/lolkda/dsh-skills-manager/blob/master/docs/release.md). No step requires running `npm publish` locally or storing an npm token.
+
 ## 0.2.1
 
 ### Fixed

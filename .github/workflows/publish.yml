@@ -1,0 +1,279 @@
+# 打包并发布到 npm。
+#
+# 触发方式只有两种：推一个 `v*` tag，或者手动 workflow_dispatch 指定 tag。
+# 之所以不跟着 push 分支发：发布不可逆，必须有一个明确的、指向某个提交的意图。
+#
+# 为什么拆成 verify / publish 两个 job：
+#   1) 测试跑的字节必须就是要发布的字节。verify 里 `npm pack` 出 tgz 当 artifact 传下去，
+#      publish 只负责把这个 tgz 推上去，中间不再重新打包。
+#   2) 发布权限只出现在 publish job 里：跑测试的 job 连 `id-token: write` 都没有，
+#      拿不到任何可用于发布的东西。
+#
+# 想加人工审批再发布：先在仓库 Settings → Environments 里**建好**名字叫 `npm` 的环境
+# （配 required reviewers），然后回来给 publish job 加一行 `environment: npm`。
+# 顺序不能反 —— 直接引用一个不存在的环境时，Actions 会隐式创建它，而隐式创建有
+# 已知的"job 概率性不启动"问题（actions/runner#1190）。
+#
+# 认证走 npm Trusted Publishing（OIDC）：不需要任何长期 token。
+#   - publish job 有 `id-token: write`，npm（>= 11.5.1）会拿 GitHub 的 id_token 去
+#     `POST /-/npm/v1/oidc/token/exchange/package/<包名>` 换一个短时 token（见 npm 自己的
+#     lib/utils/oidc.js，交换发生在 `npm publish` 内部、鉴权检查之前）。
+#   - 同一个 id_token 也被 sigstore 用来签 provenance，所以 `--provenance` 走的是同一条通路。
+#   - 交换失败时 npm 不会报错，而是静默回退到配置里的 token；因此这里**故意不配置** token，
+#     让 OIDC 成为唯一路径 —— 静默回退到一个坏 token 只会把问题推到更难查的地方。
+#
+# 需要的一次性配置（在 npmjs.com 上，不是 GitHub 上）：
+#   Package → Settings → Trusted Publisher → GitHub Actions，
+#   填 Organization/user = lolkda，Repository = dsh-skills-manager，
+#   Workflow filename = publish.yml（必须与文件名逐字相同，含 .yml）；
+#   Environment 留空 —— 本 workflow 的 publish job 没有 `environment:`，
+#   若在 npm 侧填了环境名，OIDC 声明的 environment 与配置不匹配，交换会被拒。
+#
+# 想先用 token 兜底（不推荐）：在仓库 Settings → Secrets 加 `NPM_TOKEN`，再给 publish 那步
+# 加回 `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}`。注意 npm 的优先级是 OIDC 优先。
+
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag（形如 v0.2.2-rc.1）；留空则用当前 ref，此时必须是在 tag 上触发'
+        required: false
+        type: string
+      dry-run:
+        description: '只演练，不真正推送'
+        required: false
+        type: boolean
+        default: false
+
+# 同一 tag 不允许两个发布同时跑；不取消进行中的，避免把已推送一半的发布掐掉。
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: 校验并打包
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      dist_tag: ${{ steps.plan.outputs.dist_tag }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      # tag 与 package.json 版本不一致、或者预发布版误落 latest，都在这一步拦下。
+      # 判定逻辑在 scripts/release-plan.mjs 里，有 test/release-plan.test.mjs 兜着。
+      - name: 算发布计划
+        id: plan
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || 'false' }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          if [ -n "${DISPATCH_TAG}" ]; then
+            # `tag` 输入只是一个字符串，它证明不了那个 tag 真的指向当前这次提交 —— 真拿它
+            # 去发，就等于允许"从任意提交发布一个声称是某个 tag 的版本"。所以它只服务演练：
+            # 真实的手动发布请把 Actions 页面的 "Use workflow from" 选成那个 tag（此时
+            # GITHUB_REF=refs/tags/... 由 GitHub 保证），或干脆 push tag。
+            if [ "${DRY_RUN}" != "true" ]; then
+              echo "::error::手动触发真实发布时不要使用 tag 输入（无法证明它指向当前提交）；请把 \"Use workflow from\" 选成要发布的 tag，或直接 push 该 tag。tag 输入仅用于 dry-run 演练"
+              exit 1
+            fi
+            ref="refs/tags/${DISPATCH_TAG}"
+          else
+            ref="${GITHUB_REF}"
+          fi
+          echo "版本 ${version}，ref ${ref}"
+          node scripts/release-plan.mjs --version "${version}" --ref "${ref}"
+
+      - name: 跑测试
+        run: npm run check
+
+      - name: 确认该版本在 npm 上还不存在
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          name=$(node -p "require('./package.json').name")
+          # 显式带 --registry：项目级 .npmrc 里写的 registry 会被环境变量（如自建 runner 上的
+          # npm_config_registry 镜像）压过去，而「在哪个 registry 上判存在」和「往哪个 registry
+          # 发」必须是同一个。
+          registry=https://registry.npmjs.org
+          if published=$(npm view "${name}@${VERSION}" version --registry "${registry}" 2>/dev/null); then
+            echo "::error::${name}@${published} 已经发布过，npm 不允许覆盖同一版本；请先在 package.json 里提升版本号"
+            exit 1
+          fi
+          echo "${name}@${VERSION} 尚未发布，可以继续"
+
+      - name: 打包
+        run: |
+          set -euo pipefail
+          # npm 不会自己建这个目录（npm 11 实测 ENOENT），所以显式 mkdir。
+          mkdir -p dist
+          npm pack --pack-destination dist
+          ls -la dist
+          # 产物白名单由 package.json 的 files 字段决定；这里只检查确实只有一个 tgz，
+          # 免得 publish 那步靠 glob 猜。用 glob 而不是 `ls | wc -l`：文件名里万一有空格或
+          # 换行，`ls` 的输出是没法可靠计数的（shellcheck SC2012）。
+          shopt -s nullglob
+          tarballs=(dist/*.tgz)
+          if [ "${#tarballs[@]}" -ne 1 ]; then
+            echo "::error::期望正好一个 tgz，实际 ${#tarballs[@]} 个"
+            exit 1
+          fi
+          echo "打包产物：${tarballs[0]}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-tarball
+          path: dist/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 摘要
+        run: |
+          {
+            echo "### npm 发布计划"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "| --- | --- |"
+            echo "| 版本 | \`${{ steps.plan.outputs.version }}\` |"
+            echo "| tag | \`${{ steps.plan.outputs.tag }}\` |"
+            echo "| dist-tag | \`${{ steps.plan.outputs.dist_tag }}\` |"
+            echo "| 预发布 | ${{ steps.plan.outputs.prerelease }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: 发布到 npm
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # npm provenance 走 OIDC 签名，需要这一条
+    steps:
+      # 不再 checkout：要发布的产物就是 verify 里测过的那个 tgz，重新 checkout 也拿不到它。
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-tarball
+
+      # 刻意**不写** registry-url：那会让 setup-node 生成一行
+      # `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}`，而 NODE_AUTH_TOKEN 未配置时
+      # npm 并不把它当空值 —— 实测这行仍然是一个"存在但无效"的凭据，于是 npm 内部
+      # `noCreds` 判断为假，OIDC 交换失败也不再有任何提示，下一步的 dry-run 守卫会被骗过。
+      # registry 由发布命令的 `--registry` 显式指定，这里本来也不需要它。
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # OIDC 交换失败是静默的，所以先自己把前提条件查一遍，别等到 npm publish 报一句
+      # 看不出所以然的 "requires you to be logged in"。
+      - name: 确认 OIDC 通路
+        env:
+          # 只为「你配了兜底 token」时给个提醒；正常路径不读它。
+          NPM_TOKEN_FALLBACK: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm_version=$(npm --version)
+          echo "npm ${npm_version}"
+
+          # Trusted Publishing 是 npm 11.5.1 才有的能力；更早的版本根本不认识 OIDC 交换，
+          # 会直接回退到（本例中不存在的）token。node 22 自带的 npm 10 就会踩这个坑。
+          if [ "$(printf '%s\n11.5.1\n' "${npm_version}" | sort -V | head -1)" != "11.5.1" ]; then
+            echo "::error::npm ${npm_version} 太旧，Trusted Publishing 需要 >= 11.5.1；请把 setup-node 的 node-version 提到 24"
+            exit 1
+          fi
+
+          # 有 id-token: write 时 GitHub 才会注入这两个变量。
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::error::拿不到 OIDC token（ACTIONS_ID_TOKEN_REQUEST_URL 为空）；检查 publish job 的 permissions 是否有 id-token: write"
+            exit 1
+          fi
+
+          if [ -n "${NPM_TOKEN_FALLBACK}" ]; then
+            echo "::warning::检测到 NPM_TOKEN；OIDC 交换失败时 npm 会静默回退到它，正常路径本应走 OIDC"
+          fi
+
+          {
+            echo "### 认证路径"
+            echo ""
+            echo "npm \`${npm_version}\` + OIDC（Trusted Publishing），包级短时 token，无长期凭据。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 发布
+        env:
+          DIST_TAG: ${{ needs.verify.outputs.dist_tag }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || 'false' }}
+        run: |
+          set -euo pipefail
+          # `./` 前缀不是装饰：没有它，npm 会把 `lolkda-dsh-skills-manager-0.2.2-rc.1.tgz`
+          # 里的斜杠当成 GitHub 简写去 `git ls-remote`，报一个和 npm 毫不相干的 git 错误。
+          shopt -s nullglob
+          tarballs=(./*.tgz)
+          if [ "${#tarballs[@]}" -ne 1 ]; then
+            echo "::error::期望正好一个 tgz，实际 ${#tarballs[@]} 个"
+            exit 1
+          fi
+          tarball="${tarballs[0]}"
+
+          args=(publish "${tarball}"
+            --tag "${DIST_TAG}"
+            --access public
+            --registry https://registry.npmjs.org
+            --provenance)
+          if [ "${DRY_RUN}" = "true" ]; then
+            # verbose 是为了在日志里留下 OIDC 交换的结论（npm 的 oidc.js 只在 verbose 级别打印
+            # "Successfully retrieved and set token"）；这些日志里不含 token 本身。
+            args+=(--dry-run --loglevel=verbose)
+            echo "演练模式：只校验，不推送"
+          fi
+
+          if [ "${DRY_RUN}" != "true" ]; then
+            npm "${args[@]}"
+            echo "已发布 ${tarball}（dist-tag: ${DIST_TAG}）"
+            exit 0
+          fi
+
+          # 演练模式要额外干一件事：**证明凭据是有的**。
+          # `npm publish --dry-run` 在完全没有凭据时也只 warn 一句 "requires you to be logged in
+          # (dry-run)" 然后 exit 0 —— 也就是说 dry-run 默认根本验证不了认证通路，
+          # 而认证恰好是第一次上 Trusted Publishing 时最容易配错的地方。
+          # 这里反过来用那句话当判据：它出现 = 这次 dry-run 其实没有可用凭据。
+          log_file=$(mktemp)
+          set +e
+          npm "${args[@]}" 2>&1 | tee "${log_file}"
+          status=${PIPESTATUS[0]}
+          set -e
+          [ "${status}" -eq 0 ] || exit "${status}"
+
+          if grep -q "requires you to be logged in" "${log_file}"; then
+            echo "::error::dry-run 期间 npm 没有任何可用凭据，OIDC 交换没成功；检查 npmjs.com 上的 Trusted Publisher 登记（仓库、workflow 文件名 publish.yml、Environment 留空）"
+            exit 1
+          fi
+          # 上面那条只证明「有凭据」。这句把 OIDC 到底换没换成单独说出来 ——
+          # CI 里没配任何 token 时，凭据只可能来自 OIDC；本机跑则可能来自已有的 .npmrc。
+          if grep -q "Successfully retrieved and set token" "${log_file}"; then
+            echo "OIDC 交换成功：npm 已用 GitHub 的 id_token 换到包级短时 token"
+          else
+            echo "::warning::日志里没有 OIDC 交换成功的记录；凭据可能来自兜底 token 或本机 .npmrc"
+          fi
+          echo "演练通过，未推送 ${tarball}"
