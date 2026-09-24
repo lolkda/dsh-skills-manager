@@ -2,7 +2,15 @@
 
 本仓库的发布只有一条路：**推 tag → GitHub Actions 打包并发布**。没有任何一步需要在本机跑 `npm publish`。
 
-当前状态：npm 上是 `0.2.0`（`latest`，2026-09-20 发布），仓库里已经走到 `0.2.2-rc.1` 但**尚未发布**。
+当前状态：npm 上 `latest` = **`0.2.2`**（2026-09-24T16:07Z 发布）。这是第一个经 GitHub Actions + OIDC 发布的版本，`npm audit signatures` 验到 1 个已签名的 attestation。
+
+| 版本 | dist-tag | 发布方式 |
+|---|---|---|
+| 0.1.0 | latest（当时） | 本机手工 `npm publish` |
+| 0.2.0 | latest | 本机手工 `npm publish`（日志见 `audit/npm-publish.log`） |
+| 0.2.2 | latest | GitHub Actions：推 tag `v0.2.2`，OIDC 认证，带 provenance |
+
+`0.2.1` 与 `0.2.2-rc.1` 只在本地提交里存在过，从未发到 npm。
 
 ## 涉及的文件
 
