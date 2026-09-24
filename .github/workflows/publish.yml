@@ -225,7 +225,7 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || 'false' }}
         run: |
           set -euo pipefail
-          # `./` 前缀不是装饰：没有它，npm 会把 `lolkda-dsh-skills-manager-0.2.2-rc.1.tgz`
+          # `./` 前缀不是装饰：没有它，npm 会把 `lolkda-dsh-skills-manager-<版本>.tgz`
           # 里的斜杠当成 GitHub 简写去 `git ls-remote`，报一个和 npm 毫不相干的 git 错误。
           shopt -s nullglob
           tarballs=(./*.tgz)

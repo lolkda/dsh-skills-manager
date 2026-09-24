@@ -61,9 +61,9 @@ dsh plugin --profile web add link:F:/project/dsh-skills-manager
 ```bash
 npm pack
 # 普通 npm 项目安装：
-npm install /absolute/path/lolkda-dsh-skills-manager-0.2.1.tgz
+npm install /absolute/path/lolkda-dsh-skills-manager-0.2.2.tgz
 # DSH Web profile 安装：
-dsh plugin --profile web add /absolute/path/lolkda-dsh-skills-manager-0.2.1.tgz
+dsh plugin --profile web add /absolute/path/lolkda-dsh-skills-manager-0.2.2.tgz
 ```
 
 替换已安装版本后需要**重启 DSH 宿主，再刷新原 GUI**；只刷新页面不会替换已加载的 ESM 后端。打包不会自动发布到 npm，`@latest` 指向的仍是注册表已经发布的版本。改动与已知测试限制见 [CHANGELOG](https://github.com/lolkda/dsh-skills-manager/blob/master/CHANGELOG.md)。
@@ -217,7 +217,7 @@ dsh plugin --profile web add link:F:/project/dsh-skills-manager
 推一个 `v<package.json 版本>` tag 即可，GitHub Actions 会跑测试、打包并发布到 npm：
 
 ```bash
-git tag v0.2.2-rc.1 && git push origin v0.2.2-rc.1
+git tag v0.2.2 && git push origin v0.2.2
 ```
 
 正式版发到 `latest`，带 `-` 的预发布版发到 `next`，两者不会互相污染。认证走 npm Trusted Publishing（OIDC）—— **不需要任何长期 token 或仓库 secret**；一次性配置、dry-run 演练入口和实测踩到的坑见 [docs/release.md](docs/release.md)。

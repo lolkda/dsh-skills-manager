@@ -52,7 +52,7 @@ git push origin HEAD --follow-tags
 推 tag 之后 `publish.yml` 自动跑。**tag 名与 `package.json` 版本不一致会直接失败**，不会发出任何东西 —— 这一步由 `scripts/release-plan.mjs` 判定，本地也能先自测：
 
 ```bash
-node scripts/release-plan.mjs --version "$(node -p "require('./package.json').version")" --ref refs/tags/v0.2.2-rc.1
+node scripts/release-plan.mjs --version "$(node -p "require('./package.json').version")" --ref refs/tags/v0.2.2
 ```
 
 ## workflow 到底做了什么
@@ -83,7 +83,7 @@ dist-tag 规则：版本号含 `-`（如 `0.2.2-rc.1`）→ `next`，否则 → 
 
 ## 只演练、不发布
 
-Actions 页面 → Publish to npm → **Run workflow**，`tag` 填 `v0.2.2-rc.1`、`dry-run` 勾上。verify 全跑，publish 走 `npm publish --dry-run`。
+Actions 页面 → Publish to npm → **Run workflow**，`tag` 填 `v0.2.2`、`dry-run` 勾上。verify 全跑，publish 走 `npm publish --dry-run`。
 
 `tag` 输入**只能用于演练**：它只是一个字符串，证明不了那个 tag 真的指向当前提交。真实的手动发布请把界面的 **Use workflow from** 选成要发布的 tag（这时 `GITHUB_REF=refs/tags/...` 由 GitHub 保证，`tag` 输入留空即可），或者干脆 push tag；带着 `tag` 输入做非演练发布会直接被拒。
 
