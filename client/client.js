@@ -21,8 +21,14 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
-    /** 宿主路由前缀，必须与 lib/routes.js 的 ROUTE_PREFIX 一致。 */
-    const ROUTE = '/dsh-skills-manager'
+    /**
+     * 宿主端点前缀：官方 `/api` 通道下的精确路径。
+     *
+     * 走官方通道意味着**访问控制由宿主完成**（Host/Origin fence + 浏览器会话鉴权），
+     * 所以 401/403 是宿主给的、响应体不是 JSON —— 这里必须把它们翻成用户能懂的话，
+     * 而不是笼统地报"非 JSON 响应"。
+     */
+    const ROUTE = '/api/dsh-skills-manager'
 
     /** 设置导航里的位置：排在提示词之后。 */
     const SECTION_ORDER = 62
@@ -60,6 +66,10 @@ window.__ModuleLoader__.load({
         body: body === undefined ? undefined : JSON.stringify(body),
       })
       const payload = await response.json().catch(() => null)
+      // 这两条是宿主给的，且**响应体不是 JSON**：分别是「浏览器会话没有通过鉴权」与
+      // 「本机 Host 不在受信列表」。笼统地报"非 JSON 响应"会让人以为插件坏了。
+      if (!payload && response.status === 401) throw new Error('浏览器会话未认证（HTTP 401）：请从 DSH 界面打开本页，或刷新后重试')
+      if (!payload && response.status === 403) throw new Error('宿主拒绝了本次请求（HTTP 403）：当前访问的主机不在受信列表，请用 DSH 启动时给出的地址访问')
       if (!payload) throw new Error(`接口返回了非 JSON 响应（HTTP ${response.status}）`)
       return payload
     }

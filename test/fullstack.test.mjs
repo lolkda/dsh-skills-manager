@@ -163,7 +163,7 @@ test('界面新建技能：字段真的走到了磁盘上', async () => {
     submit.props.onClick()
     await client.update()
 
-    const createCall = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/create'))
+    const createCall = calls.find((call) => call.url.startsWith('/api/dsh-skills-manager/skill/create'))
     assert.ok(createCall, '应当发出创建请求')
     // 与服务端 dispatch 读的字段逐个对上 —— 少一个或多一个都会在这里现形。
     assert.deepEqual(Object.keys(createCall.body).sort(), ['body', 'description', 'name', 'rootKey', 'whenToUse'])
@@ -203,7 +203,7 @@ test('界面导入技能：从路径导入走过的字段是真的', async () =>
     go.props.onClick()
     await client.update()
 
-    const imported = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/import'))
+    const imported = calls.find((call) => call.url.startsWith('/api/dsh-skills-manager/skill/import'))
     assert.ok(imported, '应当发出导入请求')
     assert.deepEqual(Object.keys(imported.body).sort(), ['kind', 'overwrite', 'path', 'rootKey'])
     assert.equal(imported.body.kind, 'path')
@@ -228,7 +228,7 @@ test('界面查看与保存正文：改动落盘，界面里也读得到', async
     await client.update()
     tree = await client.update()
 
-    const contentCall = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/content'))
+    const contentCall = calls.find((call) => call.url.startsWith('/api/dsh-skills-manager/skill/content'))
     assert.ok(contentCall, '读正文的请求要带上 rootKey 与 name')
     assert.match(contentCall.url, /rootKey=/)
     assert.match(contentCall.url, /name=/)
@@ -245,7 +245,7 @@ test('界面查看与保存正文：改动落盘，界面里也读得到', async
     buttonByText(tree, '保存').props.onClick()
     await client.update()
 
-    const save = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/save'))
+    const save = calls.find((call) => call.url.startsWith('/api/dsh-skills-manager/skill/save'))
     assert.ok(save, '应当发出保存请求')
     assert.deepEqual(Object.keys(save.body).sort(), ['content', 'docPath', 'name', 'rootKey'])
     const expectedPath = join(env.home, 'skills', 'plain', 'SKILL.md')
@@ -285,7 +285,7 @@ test('界面删除技能：先确认，再永久删除', async () => {
     await client.update()
     tree = await client.update()
 
-    const deleteCall = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/delete'))
+    const deleteCall = calls.find((call) => call.url.startsWith('/api/dsh-skills-manager/skill/delete'))
     assert.ok(deleteCall, '应当发出删除请求')
     assert.deepEqual(Object.keys(deleteCall.body).sort(), ['docPath', 'name', 'rootKey'])
     assert.equal(deleteCall.body.docPath, doomed)
@@ -315,7 +315,7 @@ test('界面新建：名字非法时把话说出来，而不是静默什么都�
     tree = await client.update()
     tree = await client.update()
 
-    const createCall = calls.find((call) => call.url.startsWith('/dsh-skills-manager/skill/create'))
+    const createCall = calls.find((call) => call.url.startsWith('/api/dsh-skills-manager/skill/create'))
     assert.ok(createCall, '请求本身要发出去')
     const notice = byClass(tree, 'dshsm-notice--danger')
     assert.ok(notice, '服务端拒绝之后界面要显示错误')

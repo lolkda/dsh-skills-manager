@@ -43,6 +43,8 @@
 
 ## 安装
 
+**要求 DSH >= 0.2.1-alpha.2**（0.3.0 起改用官方 `/api` 精确 Fetch 路由表；0.1.x 与 0.2.0 上端点不会注册，界面不可用）。
+
 ```powershell
 dsh plugin --profile web add @lolkda/dsh-skills-manager@latest --registry=https://registry.npmjs.org/
 dsh --profile web --dump-config   # 确认配置里出现 dsh-skills-manager
@@ -92,11 +94,15 @@ dsh plugin --profile web add /absolute/path/lolkda-dsh-skills-manager-0.2.2.tgz
 
 ## 验收：不信自报，读注册表
 
-`GET /dsh-skills-manager/registry` 返回 `ctx.skills.snapshot()` 的真实解析结果 —— 每个技能最终赢得的 `invocation`、胜出提供方、来源。启停是否生效由它判定，而不是由本插件自己的状态接口自称：
+`GET /api/dsh-skills-manager/registry` 返回 `ctx.skills.snapshot()` 的真实解析结果 —— 每个技能最终赢得的 `invocation`、胜出提供方、来源。启停是否生效由它判定，而不是由本插件自己的状态接口自称：
 
 ```powershell
-curl -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/dsh-skills-manager/registry
+# 需要带上浏览器的会话 cookie（DevTools → Application → Cookies 里的 `dsh-auth-*`）：
+# 端点走官方 /api 通道，Host/Origin fence 与鉴权都由宿主完成，插件自己不再判 Host。
+curl -b "dsh-auth-<hash>=<值>" -H "Host: 127.0.0.1:3080" http://127.0.0.1:3080/api/dsh-skills-manager/registry
 ```
+
+没有会话 cookie 时宿主返回 401（响应体是纯文本 `unauthorized`，不是 JSON），Host 不在受信列表时返回 403。带 Host 头本身**不再是**通行证 —— 这正是旧版本与 0.3.0 的关键差别。
 
 响应里的 `scope` 字段说明它读的是哪一层，这一点很关键：
 
@@ -180,7 +186,7 @@ description: 参考 macOS): 浅灰白底        # 冒号后跟空格 = YAML 嵌�
 
 理由很直接：**这个插件最容易犯的错，是声称一条模型从未收到过的技能"生效"。** 那比不做还糟。
 
-路由前缀为什么不放在 `/api` 下：`dsh-client-connection` 用 `{kind:'prefix', path:'/api'}` 注册了一个鉴权路由，而前缀路由**先注册先匹配**；本插件的 bundle 排在 profile 末尾，于是所有 `/api/*` 请求恒定 401。`@lolkda/dsh-prompt-manager` 早已用非 `/api` 前缀绕开这一点。
+端点为什么现在就在 `/api` 之下：`dsh-client-connection` 的 `/api` 是一个**前缀**路由，前缀路由先注册先匹配，所以自己再挂一条 `/api/...` 前缀只会撞上它的鉴权（恒 401）——这条老经验仍然成立。0.3.0 的解法不是绕开 `/api`，而是改用它提供的**精确 Fetch 路由表**（`ctx.connection.fetch.register`）：按 pathname 查表、先于前缀分发，因此既不会互相踩，也顺带继承了宿主的 Host/Origin fence 与浏览器会话鉴权。旧做法（自己挂 `/dsh-skills-manager` 前缀路由 + 自己写 Host 校验）在 DSH 0.2.x 上早已失效，因为它的就绪条件依赖 `webRuntime`，而那个服务被删了。完整取舍见 [决策笔记](https://github.com/lolkda/dsh-skills-manager/blob/master/.agents/notes/implemented/architecture/2026-10-11-official-api-fetch-routes.md)。
 
 ## 从 michengai 迁移
 

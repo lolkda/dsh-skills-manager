@@ -3,17 +3,26 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { boot, call } from './helpers/host-harness.mjs'
-import { validateHost } from '../lib/routes.js'
+import { boot, call, routeOf } from './helpers/host-harness.mjs'
+import { ROUTE_PREFIX } from '../lib/routes.js'
 
 
-test('apply 注册了路由、工具与两个提供方', async () => {
+test('apply 把全部端点注册进官方 /api 精确路由表', async () => {
   const env = await boot()
   try {
     assert.equal(env.registryReady, true)
-    assert.equal(env.routes.length, 1)
-    assert.equal(env.routes[0].kind, 'prefix')
-    assert.equal(env.routes[0].path, '/dsh-skills-manager')
+    assert.equal(env.routes.length, 8, `端点条数不对：${env.routes.map((r) => r.path).join('、')}`)
+    const readPaths = ['/catalog', '/registry', '/skill/content'].map((suffix) => `${ROUTE_PREFIX}${suffix}`)
+    for (const route of env.routes) {
+      assert.ok(route.path.startsWith(`${ROUTE_PREFIX}/`), `${route.path} 不在 ${ROUTE_PREFIX} 下`)
+      // 只声明自己真正用的方法：读端点 GET，写端点 POST。写宽了会让错方法的请求走进业务逻辑。
+      assert.deepEqual([...route.methods], [readPaths.includes(route.path) ? 'GET' : 'POST'], `${route.path} 的方法声明不对`)
+      assert.equal(route.requestBody, 'buffered', `${route.path} 必须走可判长度的缓冲体`)
+      assert.equal(typeof route.fetch, 'function', `${route.path} 缺少 fetch`)
+    }
+    // 0.3.0 的破坏性改动：不再自己往 webServer 上挂前缀路由（那要求 webRuntime，而
+    // DSH 0.2.x 删了它）。这条断言就是那次事故的守卫。
+    assert.equal(env.rawRoutes.length, 0, '不应该再有直注册到 webServer 的路由')
     assert.ok(env.tools.length >= 6, `工具数量偏少：${env.tools.length}`)
     assert.ok(env.tools.some((t) => t.name === 'skills_set_enabled'))
   } finally {
@@ -52,18 +61,21 @@ test('工具渲染把失败结果显示成可读文本', async () => {
   }
 })
 
-test('webServer 晚于插件就绪时，路由会等它出现再注册', async () => {
+test('依赖晚于插件就绪时，端点会等它出现再注册', async () => {
   // 这就是真机上真实发生过的时序：cordis 只等声明过的服务，插件先挂载，webServer 后到。
   // 曾经的做法是当场 `ctx.get('webServer')` 拿到 undefined 就静默放弃 —— 服务端一切正常，
-  // 日志一片干净，只是每个请求都 404。
-  const env = await boot({ deferWebServer: true, deferTools: true })
+  // 日志一片干净，只是每个请求都 404。0.2.0 起又多了一层：就绪条件里写了一个已经不存在的
+  // 服务名（webRuntime），闸门同样永远打不开。
+  const env = await boot({ deferWebServer: true, deferConnection: true, deferTools: true })
   try {
     assert.equal(env.routes.length, 0, '服务未就绪时不该注册')
     assert.equal(env.pending.length, 2, '应当挂起两处延迟注入等待服务')
     env.provide(['webServer', 'tools'])
-    assert.equal(env.routes.length, 1, 'webServer 出现后路由必须补上')
+    assert.equal(env.routes.length, 0, '只有 webServer、没有 connection 时不该注册')
     assert.equal(env.tools.length, 7, 'tools 出现后工具必须补上')
-    const response = await env.request('GET', '/dsh-skills-manager/catalog')
+    env.provide(['connection'])
+    assert.equal(env.routes.length, 8, 'connection 出现后端点必须补上')
+    const response = await env.request('GET', '/api/dsh-skills-manager/catalog')
     assert.equal(response.ok, true)
   } finally {
     env.cleanup()
@@ -73,7 +85,7 @@ test('webServer 晚于插件就绪时，路由会等它出现再注册', async (
 test('GET /registry 没有 agent 时退回宿主层视图', async () => {
   const env = await boot()
   try {
-    const response = await env.request('GET', '/dsh-skills-manager/registry')
+    const response = await env.request('GET', '/api/dsh-skills-manager/registry')
     assert.equal(response.ok, true)
     assert.equal(response.data.scope, 'host')
     assert.deepEqual(response.data.agents, [])
@@ -103,7 +115,7 @@ test('GET /registry 有 agent 时，把该 agent 的作用域 key 传给注册�
       seen.push(options)
       return original(options)
     }
-    const response = await env.request('GET', '/dsh-skills-manager/registry')
+    const response = await env.request('GET', '/api/dsh-skills-manager/registry')
     assert.equal(response.data.scope, 'agent')
     assert.ok(
       seen.some((options) => options?.scope === scopeKey),
@@ -120,7 +132,7 @@ test('agent 上下文没有作用域标记时如实报告，而不是退回 glob
   const agentCtx = { get: () => ({ async snapshot() { return { complete: true, skills: [] } } }) }
   const env = await boot({ agents: { list: () => [{ id: 'agent-x', ctx: agentCtx }] } })
   try {
-    const response = await env.request('GET', '/dsh-skills-manager/registry')
+    const response = await env.request('GET', '/api/dsh-skills-manager/registry')
     assert.equal(response.data.agents[0].count, null)
     assert.match(response.data.agents[0].reason, /作用域标识/)
   } finally {
@@ -131,7 +143,7 @@ test('agent 上下文没有作用域标记时如实报告，而不是退回 glob
 test('GET /catalog 返回根与技能视图', async () => {
   const env = await boot()
   try {
-    const response = await env.request('GET', '/dsh-skills-manager/catalog')
+    const response = await env.request('GET', '/api/dsh-skills-manager/catalog')
     assert.equal(response.statusCode, 200)
     assert.equal(response.ok, true)
     const names = response.data.skills.map((s) => s.name)
@@ -149,13 +161,13 @@ test('GET /catalog 返回根与技能视图', async () => {
 test('POST /policy 停用后，注册表的真实裁决随之改变', async () => {
   const env = await boot()
   try {
-    const before = await env.request('GET', '/dsh-skills-manager/registry')
+    const before = await env.request('GET', '/api/dsh-skills-manager/registry')
     assert.equal(before.data.skills.find((s) => s.name === 'plain').modelInvocable, true)
 
-    const response = await env.request('POST', '/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
+    const response = await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
     assert.equal(response.ok, true, response.error)
 
-    const after = await env.request('GET', '/dsh-skills-manager/registry')
+    const after = await env.request('GET', '/api/dsh-skills-manager/registry')
     const plain = after.data.skills.find((s) => s.name === 'plain')
     assert.equal(plain.modelInvocable, false, '注册表必须真的不再向模型提供它')
     assert.equal(plain.userInvocable, false)
@@ -174,9 +186,9 @@ test('POST /policy 停用后，注册表的真实裁决随之改变', async () =
 test('POST /policy 能翻转文件里的 disable-model-invocation', async () => {
   const env = await boot()
   try {
-    const response = await env.request('POST', '/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'locked', enabled: true })
+    const response = await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'locked', enabled: true })
     assert.equal(response.ok, true, response.error)
-    const registry = await env.request('GET', '/dsh-skills-manager/registry')
+    const registry = await env.request('GET', '/api/dsh-skills-manager/registry')
     assert.equal(registry.data.skills.find((s) => s.name === 'locked').modelInvocable, true)
     assert.ok(readFileSync(join(env.home, 'skills', 'locked', 'SKILL.md'), 'utf8').includes('disable-model-invocation'), '文件里那句仍然在')
   } finally {
@@ -187,7 +199,7 @@ test('POST /policy 能翻转文件里的 disable-model-invocation', async () => 
 test('POST /skill/create 落盘，重复创建被拒', async () => {
   const env = await boot()
   try {
-    const created = await env.request('POST', '/dsh-skills-manager/skill/create', {
+    const created = await env.request('POST', '/api/dsh-skills-manager/skill/create', {
       rootKey: 'dsh',
       name: 'Brand New',
       description: '新建的技能',
@@ -198,7 +210,7 @@ test('POST /skill/create 落盘，重复创建被拒', async () => {
     assert.equal(existsSync(join(env.home, 'skills', 'brand-new', 'SKILL.md')), true)
     assert.ok(created.catalog.skills.some((s) => s.name === 'brand-new'))
 
-    const again = await env.request('POST', '/dsh-skills-manager/skill/create', { rootKey: 'dsh', name: 'brand-new', description: 'x' })
+    const again = await env.request('POST', '/api/dsh-skills-manager/skill/create', { rootKey: 'dsh', name: 'brand-new', description: 'x' })
     assert.equal(again.ok, false)
     assert.equal(again.code, 'skill.exists')
   } finally {
@@ -209,7 +221,7 @@ test('POST /skill/create 落盘，重复创建被拒', async () => {
 test('POST /skill/save 拒绝会弄坏技能的正文', async () => {
   const env = await boot()
   try {
-    const broken = await env.request('POST', '/dsh-skills-manager/skill/save', {
+    const broken = await env.request('POST', '/api/dsh-skills-manager/skill/save', {
       rootKey: 'dsh',
       name: 'plain',
       content: '彻底没有 frontmatter',
@@ -218,7 +230,7 @@ test('POST /skill/save 拒绝会弄坏技能的正文', async () => {
     assert.equal(broken.code, 'document.invalid')
     assert.match(readFileSync(join(env.home, 'skills', 'plain', 'SKILL.md'), 'utf8'), /普通技能/)
 
-    const saved = await env.request('POST', '/dsh-skills-manager/skill/save', {
+    const saved = await env.request('POST', '/api/dsh-skills-manager/skill/save', {
       rootKey: 'dsh',
       name: 'plain',
       content: '---\nname: plain\ndescription: 改过了\n---\n新正文\n',
@@ -233,7 +245,7 @@ test('POST /skill/save 拒绝会弄坏技能的正文', async () => {
 test('删除端点：文件真的从磁盘上没了', async () => {
   const env = await boot()
   try {
-    const deleted = await env.request('POST', '/dsh-skills-manager/skill/delete', { rootKey: 'dsh', name: 'plain' })
+    const deleted = await env.request('POST', '/api/dsh-skills-manager/skill/delete', { rootKey: 'dsh', name: 'plain' })
     assert.equal(deleted.ok, true, deleted.error)
     assert.equal(existsSync(join(env.home, 'skills', 'plain')), false, 'bundle 的整个目录都要没了')
     assert.equal(deleted.catalog.skills.some((s) => s.name === 'plain'), false, '目录里也不该再有它')
@@ -245,8 +257,8 @@ test('删除端点：文件真的从磁盘上没了', async () => {
 test('删除技能会一并清掉它的启停覆盖', async () => {
   const env = await boot()
   try {
-    await env.request('POST', '/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
-    await env.request('POST', '/dsh-skills-manager/skill/delete', { rootKey: 'dsh', name: 'plain' })
+    await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'dsh', name: 'plain', enabled: false })
+    await env.request('POST', '/api/dsh-skills-manager/skill/delete', { rootKey: 'dsh', name: 'plain' })
     const state = JSON.parse(readFileSync(join(env.home, 'dsh-skills-manager', 'state.json'), 'utf8'))
     assert.deepEqual(state.overrides.dsh ?? {}, {}, '同名技能以后重建时不该继承旧的停用状态')
   } finally {
@@ -254,27 +266,38 @@ test('删除技能会一并清掉它的启停覆盖', async () => {
   }
 })
 
-test('未知 rootKey 与非回环 Host 被拒绝', async () => {
+test('未知 rootKey 被拒绝，且 handler 不再自行判 Host', async () => {
   const env = await boot()
   try {
-    const unknown = await env.request('POST', '/dsh-skills-manager/policy', { rootKey: 'nope', name: 'plain', enabled: false })
+    const unknown = await env.request('POST', '/api/dsh-skills-manager/policy', { rootKey: 'nope', name: 'plain', enabled: false })
     assert.equal(unknown.code, 'root.unknown')
 
-    const forbidden = await env.request('GET', '/dsh-skills-manager/catalog', undefined, 'evil.example.com')
-    assert.equal(forbidden.statusCode, 403)
-    assert.equal(forbidden.code, 'host.forbidden')
+    // Host 校验已经**移交给宿主**：端点注册在官方 `/api` 通道，宿主在我们之前跑完
+    // Host/Origin fence 与浏览器会话鉴权，未通过的请求到不了 handler。所以这里带一个
+    // 可疑的 Host 也照样能跑通 —— 这正是「访问控制不是本文件的职责」的机器可读表达。
+    const foreign = await env.request('GET', '/api/dsh-skills-manager/catalog', undefined, 'evil.example.com')
+    assert.equal(foreign.ok, true, 'Host 不再是本插件的判定项；应由宿主的 fence 拦下')
   } finally {
     env.cleanup()
   }
 })
 
-test('validateHost 放行回环与受信主机', () => {
-  assert.equal(validateHost({ headers: { host: '127.0.0.1:3080' } }), null)
-  assert.equal(validateHost({ headers: { host: 'localhost:3080' } }), null)
-  assert.equal(validateHost({ headers: { host: '127.0.0.1:3080' } }, []), null)
-  assert.equal(validateHost({ headers: { host: 'box.local:3080' } }, ['box.local']), null)
-  assert.equal(validateHost({ headers: { host: 'box.local:3080' } }, []).statusCode, 403)
-  assert.equal(validateHost({ headers: {} }).statusCode, 403)
+test('访问控制交给宿主：不直注册 webServer，也没留下自己的 Host 判定', async () => {
+  const env = await boot()
+  try {
+    // 两条一起表达同一个契约：唯一的暴露面是官方 /api 精确路由表（宿主在那里做
+    // fence + 会话鉴权），本插件既不再往 webServer 直注册，也不再自己写 401/403。
+    assert.equal(env.rawRoutes.length, 0)
+    for (const route of env.routes) assert.ok(route.path.startsWith(`${ROUTE_PREFIX}/`))
+    assert.equal(routeOf(env.routes, '/api/dsh-skills-manager/does-not-exist'), undefined, '不存在的端点不该被本插件接管')
+    // 方法不对时官方通道根本不会分发（纯文本 404）：插件里因此没有"方法判断"这一分支。
+    // 测试夹具复刻同一条规则，否则会以为未声明的方法也能进我们的 handler。
+    const wrongMethod = await env.request('POST', '/api/dsh-skills-manager/catalog')
+    assert.equal(wrongMethod.statusCode, 404)
+    assert.equal(wrongMethod.text, 'not found')
+  } finally {
+    env.cleanup()
+  }
 })
 
 test('catalog 返回解析用的 cwd 与候选目录列表', async () => {
@@ -292,11 +315,11 @@ test('catalog 返回解析用的 cwd 与候选目录列表', async () => {
   }
   const env = await boot({ sessions })
   try {
-    const response = await env.request('GET', '/dsh-skills-manager/catalog')
+    const response = await env.request('GET', '/api/dsh-skills-manager/catalog')
     assert.deepEqual(Array.from(response.data.candidates), ['F:/project/alpha', 'F:/project/beta'])
     assert.equal(response.data.cwd, 'F:/project/alpha', '默认取第一个')
 
-    const explicit = await env.request('GET', `/dsh-skills-manager/catalog?cwd=${encodeURIComponent('F:/project/beta')}`)
+    const explicit = await env.request('GET', `/api/dsh-skills-manager/catalog?cwd=${encodeURIComponent('F:/project/beta')}`)
     assert.equal(explicit.data.cwd, 'F:/project/beta', '显式指定的 cwd 优先')
   } finally {
     env.cleanup()
@@ -306,7 +329,7 @@ test('catalog 返回解析用的 cwd 与候选目录列表', async () => {
 test('没有会话时候选列表为空，而不是编一个出来', async () => {
   const env = await boot({ sessions: { list: () => [] } })
   try {
-    const response = await env.request('GET', '/dsh-skills-manager/catalog')
+    const response = await env.request('GET', '/api/dsh-skills-manager/catalog')
     assert.deepEqual(Array.from(response.data.candidates), [], '没有会话就没有候选，不该凭空造一个')
     // cwd 会退化成运行时的默认目录 —— 这是合理的兜底，但它必须**如实出现在响应里**，
     // 界面据此告诉用户项目根是按哪个目录解析的，而不是让人以为用的就是自己的项目。

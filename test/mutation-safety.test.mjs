@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { createRuntime } from '../lib/index.js'
-import { installRoutes } from '../lib/routes.js'
+import { installRoutes, ROUTE_PREFIX } from '../lib/routes.js'
 import { statePath, storeDir } from '../lib/store.js'
 import { createSkill, importFiles } from '../lib/operations.js'
-import { call } from './helpers/host-harness.mjs'
+import { call, connectionSpy, routeOf } from './helpers/host-harness.mjs'
 import { makeZip } from '../spike/make-zip.mjs'
 
 const document = name => `---\nname: ${name}\ndescription: Safe fixture\n---\nOriginal body\n`
@@ -20,12 +20,10 @@ function fixture(readOnly = false) {
   const runtime = createRuntime({ dshHome: home, agentsHome: join(dir, 'agents'), log: false,
     ...(readOnly ? { includeDefaultRoots: false, bundledSkillDir: join(dir, 'bundled') } : {}) })
   runtime.setDefaultCwd(cwd)
-  let route
-  installRoutes({ get: name => name === 'webRuntime' ? { trustedHosts: [] } : undefined }, {
-    register(spec) { route = spec; return () => {} },
-  }, runtime)
+  const spy = connectionSpy()
+  installRoutes({ get: () => undefined }, spy.service, runtime)
   const root = runtime.rootsFor(cwd).find(item => item.key === (readOnly ? 'bundled' : 'dsh'))
-  return { dir, home, cwd, root, runtime, request: (method, path, body) => call(route, method, `/dsh-skills-manager${path}`, body), cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+  return { dir, home, cwd, root, runtime, request: (method, path, body) => call(routeOf(spy.routes, `${ROUTE_PREFIX}${path}`), method, `${ROUTE_PREFIX}${path}`, body), cleanup: () => rmSync(dir, { recursive: true, force: true }) }
 }
 
 test('HTTP 保存不能绕过 bundled 根的只读限制', async () => {

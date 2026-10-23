@@ -26,7 +26,7 @@ function clientFixture(f, options = {}) {
     if (options.registrySession && parsed.pathname.endsWith('/registry')) {
       parsed.searchParams.set('sessionId', options.registrySession)
     }
-    const response = await f.request(init.method ?? 'GET', parsed.pathname.replace('/dsh-skills-manager', '') + parsed.search,
+    const response = await f.request(init.method ?? 'GET', parsed.pathname.replace('/api/dsh-skills-manager', '') + parsed.search,
       init.body ? JSON.parse(init.body) : undefined)
     return { status: response.statusCode, json: async () => response }
   }

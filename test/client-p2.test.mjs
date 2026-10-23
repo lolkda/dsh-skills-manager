@@ -34,7 +34,7 @@ async function selectCwd(client, tree, cwd) {
 
 // Each test names a production transition that was missing, not a mock call count.
 test('P2：切换项目必须清理旧项目的 root 过滤器', async () => {
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': ({ url }) => catalog(requestCwd(url)) })
+  const fetch = makeFetch({ '/api/dsh-skills-manager/catalog': ({ url }) => catalog(requestCwd(url)) })
   const client = loadClient({ fetch })
   let tree = await client.mount()
   button(tree, 'project-dsh · 1').props.onClick()
@@ -46,8 +46,8 @@ test('P2：切换项目必须清理旧项目的 root 过滤器', async () => {
 
 test('P2：启停失败信息不会被后续成功的 GET 清掉', async () => {
   const client = loadClient({ fetch: makeFetch({
-    '/dsh-skills-manager/catalog': catalog(),
-    '/dsh-skills-manager/policy': { ok: false, error: 'policy-denied-test' },
+    '/api/dsh-skills-manager/catalog': catalog(),
+    '/api/dsh-skills-manager/policy': { ok: false, error: 'policy-denied-test' },
   }) })
   let tree = await client.mount()
   toggle(tree).props.onClick(); tree = await client.update()
@@ -56,8 +56,8 @@ test('P2：启停失败信息不会被后续成功的 GET 清掉', async () => {
 
 test('P2：删除失败保留错误和详情，不伪装成删除成功', async () => {
   const client = loadClient({ fetch: makeFetch({
-    '/dsh-skills-manager/catalog': catalog(),
-    '/dsh-skills-manager/skill/delete': { ok: false, error: 'delete-denied-test' },
+    '/api/dsh-skills-manager/catalog': catalog(),
+    '/api/dsh-skills-manager/skill/delete': { ok: false, error: 'delete-denied-test' },
   }) })
   let tree = await client.mount()
   skillRow(tree, 'only-a').props.onClick(); tree = await client.update()
@@ -69,8 +69,8 @@ test('P2：删除失败保留错误和详情，不伪装成删除成功', async 
 
 test('P2：读取编辑正文的网络错误可见且不产生未处理拒绝', async () => {
   const client = loadClient({ fetch: makeFetch({
-    '/dsh-skills-manager/catalog': catalog(),
-    '/dsh-skills-manager/skill/content': () => { throw new Error('read-offline-test') },
+    '/api/dsh-skills-manager/catalog': catalog(),
+    '/api/dsh-skills-manager/skill/content': () => { throw new Error('read-offline-test') },
   }) })
   let tree = await client.mount()
   skillRow(tree, 'only-a').props.onClick(); tree = await client.update()
@@ -80,7 +80,7 @@ test('P2：读取编辑正文的网络错误可见且不产生未处理拒绝', 
 })
 
 test('P2：上传读取失败时解除 busy，用户可取消并重试', async () => {
-  const client = loadClient({ fetch: makeFetch({ '/dsh-skills-manager/catalog': catalog() }) })
+  const client = loadClient({ fetch: makeFetch({ '/api/dsh-skills-manager/catalog': catalog() }) })
   let tree = await client.mount()
   button(tree, '导入技能').props.onClick(); tree = await client.update()
   const input = findFirst(tree, node => node.type === 'input' && node.props.type === 'file')
@@ -94,8 +94,8 @@ test('P2：上传读取失败时解除 busy，用户可取消并重试', async (
 test('P2：不可加载技能可展开诊断和编辑，不误称为同名遮蔽', async () => {
   const response = catalog(A, true)
   const fetch = makeFetch({
-    '/dsh-skills-manager/catalog': response,
-    '/dsh-skills-manager/skill/content': { ok: true, content, path: response.data.skills[0].docPath },
+    '/api/dsh-skills-manager/catalog': response,
+    '/api/dsh-skills-manager/skill/content': { ok: true, content, path: response.data.skills[0].docPath },
   })
   const client = loadClient({ fetch })
   let tree = await client.mount()
@@ -110,7 +110,7 @@ test('P2：不可加载技能可展开诊断和编辑，不误称为同名遮蔽
 })
 
 test('P2：损坏技能的详情不能宣称当前模型可用', async () => {
-  const client = loadClient({ fetch: makeFetch({ '/dsh-skills-manager/catalog': catalog(A, true) }) })
+  const client = loadClient({ fetch: makeFetch({ '/api/dsh-skills-manager/catalog': catalog(A, true) }) })
   let tree = await client.mount()
   skillRow(tree, 'broken').props.onClick(); tree = await client.update()
   const values = findAll(byClass(tree, 'dshsm-kv'), node => node.type === 'dd')
@@ -120,8 +120,8 @@ test('P2：损坏技能的详情不能宣称当前模型可用', async () => {
 
 test('P2：同名但调用策略不同必须显示红色核对结果', async () => {
   const client = loadClient({ fetch: makeFetch({
-    '/dsh-skills-manager/catalog': catalog(),
-    '/dsh-skills-manager/registry': { ok: true, data: { divergence: {
+    '/api/dsh-skills-manager/catalog': catalog(),
+    '/api/dsh-skills-manager/registry': { ok: true, data: { divergence: {
       checked: true, ours: 1, registry: 1, missing: [], extra: [], consistent: false,
       policyMismatches: ['only-a'], sourceMismatches: [], checkedPolicies: 1,
     } } },
@@ -134,7 +134,7 @@ test('P2：同名但调用策略不同必须显示红色核对结果', async () 
 test('P2：无法安全迁移的旧 custom 覆盖必须显示全局警告', async () => {
   const response = catalog()
   response.data.diagnostics = [{ level: 'warn', code: 'override.legacyCustom', message: 'legacy-custom-review-warning' }]
-  const client = loadClient({ fetch: makeFetch({ '/dsh-skills-manager/catalog': response }) })
+  const client = loadClient({ fetch: makeFetch({ '/api/dsh-skills-manager/catalog': response }) })
   const tree = await client.mount()
   assert.match(textOf(byClass(tree, 'dshsm-notice--warn')), /legacy-custom-review-warning/)
 })

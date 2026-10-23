@@ -21,9 +21,9 @@ import { readSkillDocument } from '../lib/frontmatter.js'
 import { createRuntime } from '../lib/index.js'
 import { makeZip } from '../spike/make-zip.mjs'
 import { fileURLToPath } from 'node:url'
-import { installRoutes } from '../lib/routes.js'
+import { installRoutes, ROUTE_PREFIX } from '../lib/routes.js'
 import { statePath, storeDir } from '../lib/store.js'
-import { boot, call } from '../test/helpers/host-harness.mjs'
+import { boot, call, connectionSpy, routeOf } from '../test/helpers/host-harness.mjs'
 import { findAll, findFirst, loadClient, makeFetch, textOf } from '../test/helpers/client-harness.mjs'
 
 const doc = (name, description = 'Review fixture', extra = '') => `---\nname: ${name}\ndescription: ${description}\n${extra}---\nFixture body\n`
@@ -36,13 +36,11 @@ function fixture(configFor = () => ({})) {
   const settings = { dshHome: home, agentsHome: join(dir, 'agents'), log: false, ...configFor(dir) }
   const runtime = createRuntime(settings)
   runtime.setDefaultCwd(cwd)
-  let route
-  installRoutes({ get: (name) => name === 'webRuntime' ? { trustedHosts: [] } : undefined }, {
-    register(spec) { route = spec; return () => {} },
-  }, runtime)
-  return { dir, home, cwd, settings, runtime, request: (method, path, body) => call(route, method, path, body), cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+  const spy = connectionSpy()
+  installRoutes({ get: () => undefined }, spy.service, runtime)
+  return { dir, home, cwd, settings, runtime, routes: spy.routes, request: (method, path, body) => call(routeOf(spy.routes, path), method, path, body), cleanup: () => rmSync(dir, { recursive: true, force: true }) }
 }
-const endpoint = (name, cwd) => `/dsh-skills-manager/${name}${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`
+const endpoint = (name, cwd) => `/api/dsh-skills-manager/${name}${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`
 function bridge(env) {
   return async (url, init = {}) => {
     const result = await env.request(init.method ?? 'GET', url, init.body ? JSON.parse(init.body) : undefined)
@@ -73,13 +71,24 @@ test('CONTROL: ordinary ASCII-path create and policy persistence work', async ()
   } finally { f.cleanup() }
 })
 
-test('R01: a Host header alone must not authorize skill mutations', async () => {
+test('R01: mutations are reachable only through the host-authenticated /api channel', async () => {
   const f = fixture()
   try {
-    // call() supplies Host only: no cookie, authorization, token or Origin.
-    const result = await f.request('POST', endpoint('skill/create'), { rootKey: 'dsh', name: 'unauthenticated', description: 'No credential supplied' })
-    assert.equal(result.ok, false, `unauthenticated mutation accepted; fileExists=${existsSync(join(f.home, 'skills', 'unauthenticated', 'SKILL.md'))}`)
-    assert.ok([401, 403].includes(result.statusCode))
+    // 契约在 0.3.0 变了：访问控制整体移交宿主。端点只注册进官方 `/api` 精确路由表，
+    // 宿主的 /api 前缀处理器在我们之前跑完 Host/Origin fence 与浏览器会话鉴权 ——
+    // 因此「只有 Host 头、没有凭据」的请求根本到不了 handler，本插件也不再自己发 401/403。
+    // 机器可读的表达：全部端点都在 /api 之下，且拿不到官方注册表时**宁可没有端点**，
+    // 也不退回自己挂一条不受宿主鉴权的路由。
+    for (const route of f.routes) assert.ok(route.path.startsWith(`${ROUTE_PREFIX}/`), `${route.path} 不在 /api 通道下`)
+    assert.throws(
+      () => installRoutes({ get: () => undefined }, { register() {} }, f.runtime),
+      /fetch\.register/,
+      '缺少官方 fetch 注册表时必须直接失败，而不是另起一条无鉴权的通道',
+    )
+    // 经过宿主的请求仍受本插件自己的授权约束：rootKey 必须查得到表。
+    const result = await f.request('POST', endpoint('skill/create'), { rootKey: 'nope', name: 'unauthenticated', description: 'No valid root' })
+    assert.equal(result.ok, false)
+    assert.equal(result.code, 'root.unknown')
   } finally { f.cleanup() }
 })
 

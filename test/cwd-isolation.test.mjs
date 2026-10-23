@@ -19,7 +19,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { boot, call } from './helpers/host-harness.mjs'
+import { boot, call, routeOf } from './helpers/host-harness.mjs'
 
 const NL = String.fromCharCode(10)
 
@@ -41,14 +41,16 @@ function makeProject(parent, label) {
 test('项目级启停按项目隔离，用户级共享', async () => {
   const env = await boot()
   try {
-    const route = env.routes.find((r) => r.path === '/dsh-skills-manager')
+    // 端点现在是一条一条注册的精确路由，方法也只声明自己用的那个 —— 所以请求要走
+    // 「按路径取端点」这一步，不能随手拿一条路由去打所有方法。
+    const request = (method, path, body) => call(routeOf(env.routes, path), method, path, body)
     const A = makeProject(env.dir, 'proj-a')
     const B = makeProject(env.dir, 'proj-b')
 
-    const catalogOf = async (cwd) => (await call(route, 'GET', `/dsh-skills-manager/catalog?cwd=${encodeURIComponent(cwd)}`)).data
+    const catalogOf = async (cwd) => (await request('GET', `/api/dsh-skills-manager/catalog?cwd=${encodeURIComponent(cwd)}`)).data
     const skillOf = async (cwd, name) => (await catalogOf(cwd)).skills.find((s) => s.name === name)
     const policy = (cwd, rootKey, name, enabled) =>
-      call(route, 'POST', `/dsh-skills-manager/policy?cwd=${encodeURIComponent(cwd)}`, { rootKey, name, enabled, cwd })
+      request('POST', `/api/dsh-skills-manager/policy?cwd=${encodeURIComponent(cwd)}`, { rootKey, name, enabled, cwd })
 
     const rootOf = async (cwd, source) => (await catalogOf(cwd)).roots.find((r) => r.source === source)
 
@@ -86,11 +88,11 @@ test('不带 ?cwd= 时，项目根的键不在候选里 —— 写入必须失�
   // 项目根，拿另一个项目的键去写就会落进 `root.unknown`。宁可失败，也不能默默写到别的项目头上。
   const env = await boot()
   try {
-    const route = env.routes.find((r) => r.path === '/dsh-skills-manager')
+    const request = (method, path, body) => call(routeOf(env.routes, path), method, path, body)
     const A = makeProject(env.dir, 'proj-a')
-    const rootA = (await call(route, 'GET', `/dsh-skills-manager/catalog?cwd=${encodeURIComponent(A)}`)).data.roots.find((r) => r.source === 'project-dsh')
+    const rootA = (await request('GET', `/api/dsh-skills-manager/catalog?cwd=${encodeURIComponent(A)}`)).data.roots.find((r) => r.source === 'project-dsh')
 
-    const noCwd = await call(route, 'POST', '/dsh-skills-manager/policy', { rootKey: rootA.key, name: 'shared-name', enabled: false })
+    const noCwd = await request('POST', '/api/dsh-skills-manager/policy', { rootKey: rootA.key, name: 'shared-name', enabled: false })
     assert.equal(noCwd.ok, false, '没有 cwd 时不该悄悄成功')
     assert.equal(noCwd.code, 'root.unknown')
   } finally {

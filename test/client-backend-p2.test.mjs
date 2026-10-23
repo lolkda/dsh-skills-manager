@@ -37,7 +37,7 @@ for (const operation of ['repair', 'delete']) {
         input.props.onChange({ target: { value: repaired } }); tree = await client.update()
         await button(tree, '保存').props.onClick(); tree = await client.update()
         assert.equal(readFileSync(path, 'utf8'), repaired)
-        const latest = await env.request('GET', '/dsh-skills-manager/catalog')
+        const latest = await env.request('GET', '/api/dsh-skills-manager/catalog')
         assert.equal(latest.data.skills.find(skill => skill.name === 'repair-me').winner, true)
       } else {
         button(tree, '删除').props.onClick(); tree = await client.update()

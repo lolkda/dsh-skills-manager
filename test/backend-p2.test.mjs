@@ -12,10 +12,10 @@ import { compareWithRegistry, describeDivergence } from '../lib/divergence.js'
 import { createSkill, importFiles } from '../lib/operations.js'
 import { createProvider } from '../lib/provider.js'
 import { pathIdentity } from '../lib/roots.js'
-import { installRoutes } from '../lib/routes.js'
+import { installRoutes, ROUTE_PREFIX } from '../lib/routes.js'
 import { installTools } from '../lib/tools.js'
 import { saveState, statePath } from '../lib/store.js'
-import { call } from './helpers/host-harness.mjs'
+import { call, connectionSpy, routeOf } from './helpers/host-harness.mjs'
 
 const doc = (name, body = 'Body', extra = '') => `---\nname: ${name}\ndescription: Fixture\n${extra}---\n${body}\n`
 function put(path, text) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text, 'utf8') }
@@ -27,17 +27,17 @@ function fixture(configFor = () => ({})) {
   const runtime = createRuntime(settings)
   runtime.setDefaultCwd(cwd)
   const agents = [], tools = [], cleanups = []
-  let route
-  const ctx = { get: name => name === 'webRuntime' ? { trustedHosts: [] } : name === 'agents' ? { list: () => agents } : undefined }
-  installRoutes(ctx, { register(spec) { route = spec; return () => {} } }, runtime)
+  const spy = connectionSpy()
+  const ctx = { get: name => name === 'agents' ? { list: () => agents } : undefined }
+  installRoutes(ctx, spy.service, runtime)
   installTools(ctx, { register(spec) { tools.push(spec); return () => {} } }, runtime)
   return {
     dir, home, cwd, settings, runtime, agents,
     root: () => runtime.rootsFor(cwd).find(r => r.key === 'dsh') ?? runtime.rootsFor(cwd)[0],
     async request(method, path, body) {
-      const url = new URL(`/dsh-skills-manager${path}`, 'http://test')
+      const url = new URL(`${ROUTE_PREFIX}${path}`, 'http://test')
       if (!url.searchParams.has('cwd')) url.searchParams.set('cwd', cwd)
-      return call(route, method, url.pathname + url.search, body)
+      return call(routeOf(spy.routes, url.pathname + url.search), method, url.pathname + url.search, body)
     },
     tool: (name, args) => tools.find(tool => tool.name === name).execute({ cwd, ...args }),
     native(overlay = false) {

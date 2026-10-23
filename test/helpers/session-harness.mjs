@@ -7,8 +7,8 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem'
 import { createRuntime } from '../../lib/index.js'
-import { installRoutes } from '../../lib/routes.js'
-import { call } from './host-harness.mjs'
+import { installRoutes, ROUTE_PREFIX } from '../../lib/routes.js'
+import { call, connectionSpy, routeOf } from './host-harness.mjs'
 
 export function sessionFixture() {
   const dir = mkdtempSync(join(tmpdir(), 'dshsm-session-'))
@@ -39,18 +39,17 @@ export function sessionFixture() {
   const runtime = createRuntime(settings)
   runtime.setDefaultCwd(cwd)
   runtime.registry = registry
-  let route
+  const spy = connectionSpy()
   const ctx = {
     get(name) {
-      if (name === 'webRuntime') return { trustedHosts: [] }
       if (name === 'agents') return { list: () => agents }
       if (name === 'sessions') return { list: () => agents.map(agent => agent.session) }
     },
   }
-  installRoutes(ctx, { register(spec) { route = spec; return () => {} } }, runtime)
+  installRoutes(ctx, spy.service, runtime)
   return {
     cwd, otherCwd, home, names, runtime, agents, active, inactive, currentScope,
-    request: (method, path, body) => call(route, method, `/dsh-skills-manager${path}`, body),
+    request: (method, path, body) => call(routeOf(spy.routes, `${ROUTE_PREFIX}${path}`), method, `${ROUTE_PREFIX}${path}`, body),
     async cleanup() {
       try {
         stopNative()

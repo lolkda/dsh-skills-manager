@@ -82,14 +82,14 @@ const switchFor = (tree, name) => findAll(tree, (node) => typeof node.props?.cla
 
 test('挂载时拉取目录，并把技能、来源与状态渲染出来', async () => {
   const fetch = makeFetch({
-    '/dsh-skills-manager/catalog': catalog(),
-    '/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: true, ours: 2, registry: 2, missing: [], extra: [], consistent: true } } },
+    '/api/dsh-skills-manager/catalog': catalog(),
+    '/api/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: true, ours: 2, registry: 2, missing: [], extra: [], consistent: true } } },
   })
   const client = loadClient({ fetch })
   const tree = await client.mount()
 
   assert.equal(
-    fetch.calls.filter((call) => call.url.startsWith('/dsh-skills-manager/catalog') && call.method === 'GET').length,
+    fetch.calls.filter((call) => call.url.startsWith('/api/dsh-skills-manager/catalog') && call.method === 'GET').length,
     1,
     '挂载只该拉一次目录（依赖没写对时会反复拉）',
   )
@@ -109,7 +109,7 @@ test('挂载时拉取目录，并把技能、来源与状态渲染出来', async
 })
 
 test('点击开关发出精确的策略请求，并重新拉取目录', async () => {
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog(), '/dsh-skills-manager/policy': { ok: true, changed: true } })
+  const fetch = makeFetch({ '/api/dsh-skills-manager/catalog': catalog(), '/api/dsh-skills-manager/policy': { ok: true, changed: true } })
   const client = loadClient({ fetch })
   const tree = await client.mount()
 
@@ -121,18 +121,18 @@ test('点击开关发出精确的策略请求，并重新拉取目录', async ()
   target.props.onClick()
   await client.update()
 
-  const call = fetch.calls.find((item) => item.url.startsWith('/dsh-skills-manager/policy'))
+  const call = fetch.calls.find((item) => item.url.startsWith('/api/dsh-skills-manager/policy'))
   assert.ok(call, '必须发出策略请求')
   assert.equal(call.method, 'POST')
   assert.deepEqual(call.body, { rootKey: 'agents', name: 'dropped', enabled: true }, '请求体必须精确指向该技能与目标状态')
   assert.ok(
-    fetch.calls.filter((item) => item.url.startsWith('/dsh-skills-manager/catalog')).length >= 2,
+    fetch.calls.filter((item) => item.url.startsWith('/api/dsh-skills-manager/catalog')).length >= 2,
     '改完之后必须重新拉目录，而不是相信本地状态',
   )
 })
 
 test('接口报错时把错误显示出来，而不是白屏', async () => {
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': { ok: false, error: '注册表暂时不可用' } })
+  const fetch = makeFetch({ '/api/dsh-skills-manager/catalog': { ok: false, error: '注册表暂时不可用' } })
   const client = loadClient({ fetch })
   const tree = await client.mount()
   assert.match(textOf(tree), /注册表暂时不可用/)
@@ -149,7 +149,7 @@ test('被遮蔽的技能不当作生效项，且开关被禁用', async () => {
     loadable: true,
   })
   const fetch = makeFetch({
-    '/dsh-skills-manager/catalog': catalog({ skills: [skill({ name: 'keeper' }), shadowed] }),
+    '/api/dsh-skills-manager/catalog': catalog({ skills: [skill({ name: 'keeper' }), shadowed] }),
   })
   const client = loadClient({ fetch })
   const tree = await client.mount()
@@ -162,7 +162,7 @@ test('被遮蔽的技能不当作生效项，且开关被禁用', async () => {
 
 test('没有标签页，也没有搜索框 —— 面板直接就是技能列表', async () => {
   // 按用户要求把搜索和回收站整套拿掉后，标签行与搜索框都不该再渲染。
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
+  const fetch = makeFetch({ '/api/dsh-skills-manager/catalog': catalog() })
   const client = loadClient({ fetch })
   const tree = await client.mount()
   assert.equal(findAll(tree, (node) => node.props?.className === 'dshsm-tab').length, 0, '不该再有标签页')
@@ -180,7 +180,7 @@ test('被 DSH 丢弃的技能显示「不可加载」并禁用开关', () => {
     winner: false,
     diagnostics: [{ level: 'error', code: 'frontmatter.yaml', message: '第 2 行的值无法作为 YAML 标量解析，DSH 会因此丢弃整条技能' }],
   })
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog({ skills: [skill({ name: 'keeper' }), broken] }) })
+  const fetch = makeFetch({ '/api/dsh-skills-manager/catalog': catalog({ skills: [skill({ name: 'keeper' }), broken] }) })
   const client = loadClient({ fetch })
   return client.mount().then((tree) => {
     const text = textOf(tree)
@@ -194,7 +194,7 @@ test('被 DSH 丢弃的技能显示「不可加载」并禁用开关', () => {
 test('显示项目根是按哪个目录解析的', async () => {
   // 服务端在没有 cwd 时会退化成"取某个会话的 cwd"，会话顺序不保证稳定。界面必须让用户
   // 看见用的是哪个目录，否则项目级技能根（.dsh/skills、.agents/skills）可能悄悄换了一套。
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
+  const fetch = makeFetch({ '/api/dsh-skills-manager/catalog': catalog() })
   const client = loadClient({ fetch })
   const tree = await client.mount()
   assert.match(textOf(tree), /项目根按/, '必须交代项目根的解析依据')
@@ -202,7 +202,7 @@ test('显示项目根是按哪个目录解析的', async () => {
 })
 
 test('钉住 cwd：首次拿到后用 ?cwd= 显式带回', async () => {
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
+  const fetch = makeFetch({ '/api/dsh-skills-manager/catalog': catalog() })
   const client = loadClient({ fetch })
   const tree = await client.mount()
 
@@ -214,17 +214,17 @@ test('钉住 cwd：首次拿到后用 ?cwd= 显式带回', async () => {
   const target = switchFor(tree, 'dropped')
   target.props.onClick()
   await client.update()
-  const policy = fetch.calls.find((call) => call.url.startsWith('/dsh-skills-manager/policy'))
+  const policy = fetch.calls.find((call) => call.url.startsWith('/api/dsh-skills-manager/policy'))
   assert.ok(policy, '应当发出策略请求')
   assert.match(policy.url, /cwd=F%3A%2Fproject%2Falpha/, `后续请求必须带上钉住的 cwd，实际：${policy.url}`)
 
-  const reload = fetch.calls.filter((call) => call.url.startsWith('/dsh-skills-manager/catalog')).pop()
+  const reload = fetch.calls.filter((call) => call.url.startsWith('/api/dsh-skills-manager/catalog')).pop()
   assert.match(reload.url, /cwd=/, '重新拉目录时也要带上')
 })
 
 test('有多个候选目录时给出选择器，切换后按新目录重新解析', async () => {
   const fetch = makeFetch({
-    '/dsh-skills-manager/catalog': catalog({ candidates: ['F:/project/alpha', 'F:/project/beta'] }),
+    '/api/dsh-skills-manager/catalog': catalog({ candidates: ['F:/project/alpha', 'F:/project/beta'] }),
   })
   const client = loadClient({ fetch })
   let tree = await client.mount()
@@ -250,7 +250,7 @@ test('有多个候选目录时给出选择器，切换后按新目录重新解�
 
   beta.props.onClick()
   await client.update()
-  const latest = fetch.calls.filter((call) => call.url.startsWith('/dsh-skills-manager/catalog')).pop()
+  const latest = fetch.calls.filter((call) => call.url.startsWith('/api/dsh-skills-manager/catalog')).pop()
   assert.match(latest.url, /beta/, '切换后要按新目录重新解析')
 })
 
@@ -258,8 +258,8 @@ test('与 DSH 实际解析一致时给出经实测的确认', async () => {
   // 一致的结论也要显示：那是一句经过实测的话，而不是插件的自称。这个面板最容易犯的错
   // 就是"说技能在生效，而模型根本没收到"。
   const fetch = makeFetch({
-    '/dsh-skills-manager/catalog': catalog(),
-    '/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: true, ours: 2, registry: 2, missing: [], extra: [], consistent: true } } },
+    '/api/dsh-skills-manager/catalog': catalog(),
+    '/api/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: true, ours: 2, registry: 2, missing: [], extra: [], consistent: true } } },
   })
   const client = loadClient({ fetch })
   const tree = await client.mount()
@@ -268,8 +268,8 @@ test('与 DSH 实际解析一致时给出经实测的确认', async () => {
 
 test('核对出多报/少报时点名列出，而不是含糊其辞', async () => {
   const fetch = makeFetch({
-    '/dsh-skills-manager/catalog': catalog(),
-    '/dsh-skills-manager/registry': {
+    '/api/dsh-skills-manager/catalog': catalog(),
+    '/api/dsh-skills-manager/registry': {
       ok: true,
       data: { divergence: { checked: true, ours: 3, registry: 2, missing: ['ghost'], extra: ['invisible'], consistent: false } },
     },
@@ -282,7 +282,7 @@ test('核对出多报/少报时点名列出，而不是含糊其辞', async () =
 })
 
 test('读不到注册表时不编造一致结论', async () => {
-  const fetch = makeFetch({ '/dsh-skills-manager/catalog': catalog() })
+  const fetch = makeFetch({ '/api/dsh-skills-manager/catalog': catalog() })
   const client = loadClient({ fetch })
   const tree = await client.mount()
   assert.equal(textOf(tree).includes('已与 DSH 实际解析核对'), false, '没核对过就不能说核对过')
@@ -291,8 +291,8 @@ test('读不到注册表时不编造一致结论', async () => {
 
 test('没有可用 agent 视图时不假装核对过', async () => {
   const fetch = makeFetch({
-    '/dsh-skills-manager/catalog': catalog(),
-    '/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: false, reason: '当前没有可用的 agent 视图' } } },
+    '/api/dsh-skills-manager/catalog': catalog(),
+    '/api/dsh-skills-manager/registry': { ok: true, data: { divergence: { checked: false, reason: '当前没有可用的 agent 视图' } } },
   })
   const client = loadClient({ fetch })
   const tree = await client.mount()
