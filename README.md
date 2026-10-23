@@ -43,7 +43,7 @@
 
 ## 安装
 
-**要求 DSH >= 0.2.1-alpha.2**（0.3.0 起改用官方 `/api` 精确 Fetch 路由表；0.1.x 与 0.2.0 上端点不会注册，界面不可用）。
+运行时清单不再限定 DSH 版本；开发与发布验收基线为 DSH `0.2.1-alpha.2`。更旧的 0.1.x / 0.2.0 缺少官方 `/api` 精确 Fetch 路由表，安装后界面端点不会注册。
 
 ```powershell
 dsh plugin --profile web add @lolkda/dsh-skills-manager@latest --registry=https://registry.npmjs.org/

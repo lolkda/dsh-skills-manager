@@ -43,7 +43,7 @@
       ]
     },
     "compatibility": {
-      "dsh": ">=0.2.1-alpha.2 <0.3.0",
+      "dsh": "*",
       "profiles": [
         "web"
       ]
@@ -62,8 +62,8 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
-    "@deepseek-ai/dsh-client-connection": ">=0.2.1-alpha.2 <0.3.0",
-    "@deepseek-ai/dsh-skill": ">=0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-connection": "*",
+    "@deepseek-ai/dsh-skill": "*",
     "@deepseek-ai/schemastery": ">=3.18.0"
   },
   "peerDependenciesMeta": {

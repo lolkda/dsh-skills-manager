@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- 运行时清单解除 DSH 版本门禁：`@deepseek-ai/dsh-client-connection` 与 `@deepseek-ai/dsh-skill` 的 peer 范围改为 `*`，`dsh.compatibility.dsh` 同步改为 `*`。安装不再仅因宿主版本号被拒绝；`0.2.1-alpha.2` 仍是当前验收基线，未来版本需重新做真实宿主回归。
+
 ## 0.3.0 (2026-10-11)
 
 **Breaking**：HTTP 端点改走官方 `/api` 通道的精确 Fetch 路由表（`ctx.connection.fetch.register`），不再自己往 `webServer` 上挂 `/dsh-skills-manager` 前缀路由。
